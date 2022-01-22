@@ -92,6 +92,9 @@ object Scheme {
   implicit val showForScheme: Show[Scheme] =
     Show.fromToString
 
+  def unapply(value: Scheme): Some[CIString] =
+    Some(value.value)
+
   /**
    * Parser for a `String` which reprsents a Scheme. This parser does not
    * actually yield a value of type [[Scheme]] and is useful mostly where you
