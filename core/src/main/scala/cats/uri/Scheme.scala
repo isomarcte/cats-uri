@@ -102,7 +102,7 @@ object Scheme {
    *   [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.1]]
    */
   val stringParser: Parser[String] =
-    (Rfc5234.alpha ~ (Rfc5234.alpha | Rfc5234.digit | Parser.charIn('+', '-', '.')).rep0).string
+    (Rfc5234.alpha *> (Rfc5234.alpha | Rfc5234.digit | Parser.charIn('+', '-', '.')).rep0).string
 
   /**
    * Parser for [[Scheme]].
