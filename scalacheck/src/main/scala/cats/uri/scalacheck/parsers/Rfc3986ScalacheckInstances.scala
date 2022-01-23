@@ -13,10 +13,18 @@ object Rfc3986ScalacheckInstances {
     Gen.oneOf(Gen.alphaChar, Gen.numChar, Gen.oneOf('-', '.', '_', '~'))
 
   val genUnreservedString: Gen[String] =
-    Gen.listOf(genUnreservedChar).map(_.mkString)
+    Gen.stringOf(genUnreservedChar)
 
   val genPercentEncodedString: Gen[String] =
     Gen.hexChar.flatMap(a => Gen.hexChar.map(b => s"%$a$b"))
+
+  val genSubDelimChar: Gen[Char] =
+    Gen.oneOf(
+      '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '='
+    )
+
+  val genSubDelimString: Gen[String] =
+    Gen.stringOf(genSubDelimChar)
 
   // Generators for grammar modeled productions
 

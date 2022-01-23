@@ -45,6 +45,19 @@ object Rfc3986 {
   val percentEncodedStr: Parser[String] =
     ((Parser.char('%') *> Rfc5234.hexdig.rep(2, 2))).string
 
+  /**
+   * A parser for a sub delimiter character.
+   *
+   * {{{
+   * sub-delims    = "!" / "$" / "&" / "'" / "(" / ")"
+   *                 / "*" / "+" / "," / ";" / "="
+   * }}}
+   *
+   * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-2.2]]
+   */
+  val subDelimsChar: Parser[Char] =
+    Parser.charIn('!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=')
+
   // Parsers for modeled types
 
   /**

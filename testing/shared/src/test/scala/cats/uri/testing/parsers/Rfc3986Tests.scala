@@ -30,4 +30,16 @@ final class Rfc3986Tests extends ScalaCheckSuite {
       Rfc3986.unreservedChar.rep0.string.parseAll(str) ?= Right(str)
     }
   }
+
+  property("sub-delims characters should parse") {
+    forAll(Rfc3986ScalacheckInstances.genSubDelimChar){(char: Char) =>
+      Rfc3986.subDelimsChar.parseAll(char.toString) ?= Right(char)
+    }
+  }
+
+  property("sub-delims character strings should parse") {
+    forAll(Rfc3986ScalacheckInstances.genSubDelimString){(str: String) =>
+      Rfc3986.subDelimsChar.rep0.string.parseAll(str) ?= Right(str)
+    }
+  }
 }
