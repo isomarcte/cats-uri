@@ -26,7 +26,7 @@ import scala.collection.immutable.SortedSet
 /**
  * The scheme of a URI.
  *
- * Schemes are case-insensitive, but are canonically show as lower case.
+ * Schemes are case-insensitive, but are canonically shown as lower case.
  *
  * {{{
  * scheme      = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
@@ -39,15 +39,6 @@ sealed trait Scheme extends Product with Serializable {
   def value: CIString
 
   // final //
-
-  /**
-   * Whether or not this scheme is canonically defined in IANA.
-   *
-   * @see
-   *   [[Scheme.ianaSchemes]]
-   */
-  final def isCanonical: Boolean =
-    Scheme.ianaSchemes.contains(this)
 
   /** Renders a debug representation of this type.
     *
