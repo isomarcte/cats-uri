@@ -42,8 +42,8 @@ object Rfc3986 {
    * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-2.1]]
    * @see [[https://en.wikipedia.org/wiki/Percent-encoding]]
    */
-  val percentEncodedStr: Parser[String] =
-    ((Parser.char('%') *> Rfc5234.hexdig.rep(2, 2))).string
+  val percentEncoded: Parser[(Char, Char)] =
+    (Parser.char('%') *> (Rfc5234.hexdig ~ Rfc5234.hexdig))
 
   /**
    * A parser for a sub delimiter character.

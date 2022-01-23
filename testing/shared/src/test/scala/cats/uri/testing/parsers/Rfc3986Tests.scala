@@ -15,7 +15,7 @@ final class Rfc3986Tests extends ScalaCheckSuite {
 
   property("precent encoded strings should parse") {
     forAll(Rfc3986ScalacheckInstances.genPercentEncodedString){(str: String) =>
-      Rfc3986.percentEncodedStr.parseAll(str) ?= Right(str)
+      Rfc3986.percentEncoded.string.parseAll(str) ?= Right(str)
     }
   }
 
