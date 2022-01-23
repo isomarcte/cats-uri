@@ -15,6 +15,9 @@ object Rfc3986ScalacheckInstances {
   val genUnreservedString: Gen[String] =
     Gen.listOf(genUnreservedChar).map(_.mkString)
 
+  val genPercentEncodedString: Gen[String] =
+    Gen.hexChar.flatMap(a => Gen.hexChar.map(b => s"%$a$b"))
+
   // Generators for grammar modeled productions
 
   val genSchemeString: Gen[String] =

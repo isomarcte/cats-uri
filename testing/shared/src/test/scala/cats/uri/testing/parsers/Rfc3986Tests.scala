@@ -9,7 +9,13 @@ final class Rfc3986Tests extends ScalaCheckSuite {
 
   property("scheme strings should parse") {
     forAll(Rfc3986ScalacheckInstances.genSchemeString){(str: String) =>
-      Rfc3986.schemeParser.parseAll(str) ?= Right(str)
+      Rfc3986.schemeStr.parseAll(str) ?= Right(str)
+    }
+  }
+
+  property("precent encoded strings should parse") {
+    forAll(Rfc3986ScalacheckInstances.genPercentEncodedString){(str: String) =>
+      Rfc3986.percentEncodedStr.parseAll(str) ?= Right(str)
     }
   }
 

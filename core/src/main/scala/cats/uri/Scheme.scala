@@ -98,7 +98,7 @@ object Scheme {
    *   [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.1]]
    */
   def parser: Parser[Scheme] =
-    Rfc3986.schemeParser
+    Rfc3986.schemeStr
       .map(value => SchemeImpl.from(CIString(value)))
 
   /**
@@ -108,10 +108,10 @@ object Scheme {
   private val ianaSchemeMapping: SortedMap[CIString, Scheme] =
     SchemeDB.ianaSchemes.foldLeft(SortedMap.empty[CIString, Scheme]) {
       case (acc, value) =>
-        // We go through the schemeParser here as a fail fast sanity check. We
+        // We go through the schemeStr here as a fail fast sanity check. We
         // have to be careful to bypass SchemeImpl.from, which would attempt
         // to intern the result, which would cause a loop.
-        Rfc3986.schemeParser.parseAll(value.toString).fold(
+        Rfc3986.schemeStr.parseAll(value.toString).fold(
           _ => throw new AssertionError(s"Static IANA scheme ${value} failed parsing. This is a cats-uri bug."),
           _ => acc + (value -> SchemeImpl(value))
         )
