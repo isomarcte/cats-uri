@@ -22,6 +22,7 @@ import cats.parse._
 import org.typelevel.ci._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.SortedSet
+import cats.uri.parsers._
 
 /**
  * The scheme of a URI.
@@ -87,24 +88,6 @@ object Scheme {
     Some(value.value)
 
   /**
-   * Parser for a `String` which reprsents a Scheme. This parser does not
-   * actually yield a value of type [[Scheme]] and is useful mostly where you
-   * want to validate that something is a scheme, but not actually use it or
-   * when you are going to want to immediately unwrap the scheme for the
-   * purposes of passing it to some other system for which `String` is a
-   * convenient interoperable representation.
-   *
-   * {{{
-   * scheme      = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
-   * }}}
-   *
-   * @see
-   *   [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.1]]
-   */
-  val stringParser: Parser[String] =
-    (Rfc5234.alpha *> (Rfc5234.alpha | Rfc5234.digit | Parser.charIn('+', '-', '.')).rep0).string
-
-  /**
    * Parser for [[Scheme]].
    *
    * {{{
@@ -115,7 +98,7 @@ object Scheme {
    *   [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.1]]
    */
   def parser: Parser[Scheme] =
-    stringParser
+    Rfc3986.schemeParser
       .map(value => SchemeImpl.from(CIString(value)))
 
   /**
@@ -125,10 +108,10 @@ object Scheme {
   private val ianaSchemeMapping: SortedMap[CIString, Scheme] =
     SchemeDB.ianaSchemes.foldLeft(SortedMap.empty[CIString, Scheme]) {
       case (acc, value) =>
-        // We go through the stringParser here as a fail fast sanity check. We
+        // We go through the schemeParser here as a fail fast sanity check. We
         // have to be careful to bypass SchemeImpl.from, which would attempt
         // to intern the result, which would cause a loop.
-        stringParser.parseAll(value.toString).fold(
+        Rfc3986.schemeParser.parseAll(value.toString).fold(
           _ => throw new AssertionError(s"Static IANA scheme ${value} failed parsing. This is a cats-uri bug."),
           _ => acc + (value -> SchemeImpl(value))
         )

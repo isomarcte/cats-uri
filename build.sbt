@@ -83,6 +83,7 @@ lazy val testing = crossProject(JVMPlatform, JSPlatform)
   .in(file("testing"))
   .settings(
     libraryDependencies ++= Seq(
+      "org.scalameta" %% "munit-scalacheck" % V.munitV,
       "org.typelevel" %% "cats-kernel-laws" % V.catsV,
       "org.typelevel" %% "discipline-munit" % V.disciplineMunitV
     ).map(_ % Test),
