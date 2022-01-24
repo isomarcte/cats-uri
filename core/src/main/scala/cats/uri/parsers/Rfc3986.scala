@@ -61,7 +61,7 @@ object Rfc3986 {
   // Parsers for modeled types
 
   /**
-   * Parser for a `String` which reprsents a Scheme.
+   * A parser for a `String` which reprsents a Scheme.
    *
    * {{{
    * scheme      = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
@@ -72,4 +72,24 @@ object Rfc3986 {
    */
   val schemeStr: Parser[String] =
     (Rfc5234.alpha *> (Rfc5234.alpha | Rfc5234.digit | Parser.charIn('+', '-', '.')).rep0).string
+
+  /**
+   * A parser for the user section of the userinfo in the authority section of a URI.
+   *
+   * @note Unlike many of the parsers here, the user is not explicitly a
+   *       standalone ABNF production of RFC-3986. It is modeled separately
+   *       because the userinfo is comprised of a user moniker and optionally
+   *       a password value. The use of this format, e.g. "user:password", is
+   *       deprecated, but if encountered requires special handling. For this
+   *       reason, we parse the user and password sections of the userinfo
+   *       separately.
+   *
+   * {{{
+   * userinfo    = *( unreserved / pct-encoded / sub-delims / ":" )
+   * }}}
+   *
+   * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.1]]
+   */
+  val userinfoUserStr: Parser0[String] =
+    (unreservedChar | percentEncoded | subDelimsChar).rep0.string
 }
