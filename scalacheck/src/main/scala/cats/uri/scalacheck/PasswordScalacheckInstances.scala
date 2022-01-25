@@ -14,11 +14,18 @@
  * limitations under the License.
  */
 
-package cats.uri
+package cats.uri.scalacheck
 
-package object scalacheck {
-  object all extends SchemeScalacheckInstances with UserScalacheckInstances with PasswordScalacheckInstances
-  object scheme extends SchemeScalacheckInstances
-  object user extends UserScalacheckInstances
-  object password extends PasswordScalacheckInstances
+import cats.uri._
+import org.scalacheck._
+
+/** Scalacheck instances for [[Password]].
+  */
+private[scalacheck] trait PasswordScalacheckInstances {
+
+  final implicit val arbPassword: Arbitrary[Password] =
+    Arbitrary(NonEmptyStringGen.genNonEmptyString.map(Password.unsafeFromString))
+
+  final implicit val cogenPassword: Cogen[Password] =
+    Cogen[String].contramap(_.unsafeValue)
 }

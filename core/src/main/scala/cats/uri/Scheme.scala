@@ -38,24 +38,12 @@ import cats.uri.parsers._
 sealed trait Scheme extends Product with Serializable {
   def value: CIString
 
+  def render: String =
+    value.toString
+
   // final //
 
-  /** Renders a debug representation of this type.
-    *
-    * The differnece between this an `toString` is that this will render the
-    * type as one might expect from a canonical case class.
-    *
-    * {{{
-    * scala> Scheme.Http.toString
-    * val res0: String = http
-    *
-    * scala> Scheme.Http.debugString
-    * val res1: String = Scheme(value = http)
-    * }}}
-    */
-  final def debugString: String = s"Scheme(value = ${toString})"
-
-  override final def toString: String = value.toString.toLowerCase
+  override final def toString: String = s"Scheme(value = ${toString})"
 }
 
 object Scheme {
@@ -82,6 +70,9 @@ object Scheme {
 
   implicit val showForScheme: Show[Scheme] =
     Show.fromToString
+
+  implicit val schemeRenderable: Renderable[Scheme] =
+    Renderable.instance(_.render)
 
   def unapply(value: Scheme): Some[CIString] =
     Some(value.value)
