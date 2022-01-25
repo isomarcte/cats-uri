@@ -14,11 +14,24 @@
  * limitations under the License.
  */
 
-package cats.uri
+package cats.uri.syntax
 
-package object syntax {
-  object all extends syntax.SchemeSyntax with syntax.UserSyntax with syntax.PasswordSyntax
-  object scheme extends syntax.SchemeSyntax
-  object user extends syntax.UserSyntax
-  object password extends syntax.PasswordSyntax
+import cats.uri._
+import org.typelevel.literally.Literally
+
+private[syntax] trait UserSyntax {
+  implicit class UserContext(val sc: StringContext) {
+    def user(args: Any*): User = macro UserSyntax.make
+  }
+}
+
+private object UserSyntax extends Literally[User] {
+  def validate(c: Context)(s: String) = {
+    import c.universe._
+
+    User.fromString(s).map(_ => c.Expr(q"User.unsafeFromString($s)"))
+  }
+
+  def make(c: Context)(args: c.Expr[Any]*): c.Expr[User] =
+    apply(c)(args: _*)
 }

@@ -4,25 +4,25 @@ import cats.uri._
 import scala.language.future
 import scala.quoted.*
 
-private[syntax] trait SchemeSyntax {
+private[syntax] trait UserSyntax {
   extension (inline ctx: StringContext) {
-    inline def scheme(inline args: Any*): Scheme =
-      SchemeSyntax.literal(ctx, args)
+    inline def user(inline args: Any*): User =
+      UserSyntax.literal(ctx, args)
   }
 }
 
-private object SchemeSyntax {
+private object UserSyntax {
 
-  private def schemeExpr(sc: Expr[StringContext], args: Expr[Seq[Any]])(using q: Quotes): Expr[Scheme] =
+  private def userExpr(sc: Expr[StringContext], args: Expr[Seq[Any]])(using q: Quotes): Expr[User] =
     sc.value match {
       case Some(sc) if sc.parts.size == 1 =>
         val value: String = sc.parts.head
-        Scheme.fromString(value).fold(
+        User.fromString(value).fold(
           e => {
             quotes.reflect.report.error(e)
             ???
           },
-          _ => '{Scheme.unsafeFromString(${Expr(value)})}
+          _ => '{User.unsafeFromString(${Expr(value)})}
         )
       case Some(_) =>
         quotes.reflect.report.error("StringContext must be a single string literal")
@@ -32,6 +32,6 @@ private object SchemeSyntax {
         ???
     }
 
-  inline def literal(inline sc: StringContext, inline args: Any*): Scheme =
-    ${schemeExpr('sc, 'args)}
+  inline def literal(inline sc: StringContext, inline args: Any*): User =
+    ${userExpr('sc, 'args)}
 }

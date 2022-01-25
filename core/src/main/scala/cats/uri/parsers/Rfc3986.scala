@@ -113,4 +113,9 @@ object Rfc3986 {
    */
   val userinfoPasswordStr: Parser0[String] =
     (unreservedChar | percentEncoded | subDelimsChar | Parser.char(':')).rep0.string
+
+  val userinfo: Parser0[(Option[String], Option[Unit], Option[String])] =
+    (userinfoUserStr.? ~ Parser.char(':').? ~ userinfoPasswordStr.?).map{
+      case ((a, b), c) => (a, b, c)
+    }
 }

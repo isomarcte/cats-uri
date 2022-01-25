@@ -58,8 +58,17 @@ object Password {
       Left("Password values can not be the empty string.")
     }
 
+  def fromPercentEncodedString(value: String): Either[String, Password] =
+    PercentDecoder.decode(value).flatMap(fromString)
+
   def unsafeFromString(value: String): Password =
     fromString(value).fold(
+      e => throw new IllegalArgumentException(e),
+      identity
+    )
+
+  def unsafeFromPercentEncodedString(value: String): Password =
+    fromPercentEncodedString(value).fold(
       e => throw new IllegalArgumentException(e),
       identity
     )

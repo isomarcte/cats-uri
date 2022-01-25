@@ -1,48 +1,108 @@
 package cats.uri
 
+import cats._
+import cats.syntax.all._
+import cats.uri.parsers._
+
 sealed trait UserInfo extends Product with Serializable {
   def user: Option[User]
 
   def password: Option[Password]
+
+  /**
+   * From RFC-3986.
+   *
+   * {{{
+   * the presence or absence of delimiters within a userinfo subcomponent is
+   usually significant to its interpretation.
+   * }}}
+   *
+   * Thus the userinfo string "foo:" is not the same as "foo". This ''must''
+   * be true if user and password are both empty or if user is empty and
+   * password is non-empty. It ''may'' be true if user is non-empty, but it
+   * may also be false.
+   *
+   * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-6.2.3]]
+   */
+  def hasColonDelimiter: Boolean
+
+  def render: String = {
+    val colonString: String =
+      if (hasColonDelimiter) {
+        ":"
+      } else {
+        ""
+      }
+
+    user.fold("")(_.render) ++ colonString ++ password.fold("")(_.render)
+  }
+
+  override final def toString: String = s"UserInfo(user = ${user}, password = ${password}, hasColonDelimiter = ${hasColonDelimiter})"
 }
 
 object UserInfo {
-  final case class UserOnly(userValue: User) extends UserInfo {
-    override final def user: Option[User] = Some(userValue)
-    override final val password: Option[Password] = None
-  }
+  private[this] final case class UserInfoImpl(override val user: Option[User], override val password: Option[Password], override val hasColonDelimiter: Boolean) extends UserInfo
 
-  final case class PasswordOnly(passwordValue: Password) extends UserInfo {
-    override final val user: Option[User] = None
-    override final def password: Option[Password] = Some(passwordValue)
-  }
+  implicit val hashAndOrderForUserInfo: Hash[UserInfo] with Order[UserInfo] =
+    new Hash[UserInfo] with Order[UserInfo] {
+      override def hash(x: UserInfo): Int =
+        x.hashCode
 
-  sealed trait UserAndPassword extends UserInfo {
-    def userValue: User
-    def passwordValue: Password
+      override def compare(x: UserInfo, y: UserInfo): Int =
+        x.user.compare(y.user) match {
+          case 0 =>
+            x.password.compare(y.password) match {
+              case 0 =>
+                x.hasColonDelimiter.compare(y.hasColonDelimiter)
+              case otherwise =>
+                otherwise
+            }
+          case otherwise =>
+            otherwise
+        }
+    }
 
-    override final def user: Option[User] = Some(userValue)
-    override final def password: Option[Password] = Some(passwordValue)
+  implicit val ordering: Ordering[UserInfo] =
+    hashAndOrderForUserInfo.toOrdering
 
-    override final def toString: String = s"UserAndPassword(user = ${userValue}, password = ${password})"
-  }
+  implicit val showForUserInfo: Show[UserInfo] =
+    Show.fromToString
 
-  object UserAndPassword {
-    private[this] final case class UserAndPasswordImpl(override val userValue: User, override val passwordValue: Password) extends UserAndPassword
+  implicit val userInfoPercentEncoder: PercentEncoder[UserInfo] =
+    new PercentEncoder[UserInfo] {
+      override def encode(a: UserInfo): String =
+        a.render
+    }
 
-    def apply(user: User, password: Password): UserAndPassword =
-      UserAndPasswordImpl(user, password)
+  val OnlyColonDelimiter: UserInfo =
+    UserInfoImpl(None, None, true)
 
-    def unapply(value: UserAndPassword): Some[(User, Password)] =
-      Some(value.userValue -> value.passwordValue)
-  }
+  def apply(user: User, hasColonDelimiter: Boolean): UserInfo =
+    UserInfoImpl(Some(user), None, hasColonDelimiter)
 
   def apply(user: User): UserInfo =
-    UserOnly(user)
+    apply(user, false)
 
   def apply(password: Password): UserInfo =
-    PasswordOnly(password)
+    UserInfoImpl(None, Some(password), true)
 
   def apply(user: User, password: Password): UserInfo =
-    UserAndPassword(user, password)
+    UserInfoImpl(Some(user), Some(password), true)
+
+  def fromPercentEncodedString(value: String): Either[String, UserInfo] =
+    Rfc3986.userinfo.parseAll(value).leftMap(_ => "Invalid percent encoded UserInfo String.").flatMap{
+      case (user, colon, password) if user.isDefined || colon.isDefined || password.isDefined =>
+        for {
+          u <- user.traverse(User.fromPercentEncodedString)
+          p <- password.traverse(Password.fromPercentEncodedString)
+        } yield UserInfoImpl(u, p, colon.isDefined)
+      case _ =>
+        Left("The empty string is not a valid UserInfo value.")
+    }
+
+  def unsafeFromPercentEncodedString(value: String): UserInfo =
+    fromPercentEncodedString(value).fold(
+      e => throw new IllegalArgumentException(e),
+      identity
+    )
 }

@@ -47,6 +47,7 @@ object PercentEncoder {
         acc.toString()
       } else {
         val codePoint: Int = value.codePointAt(index)
+        val indexIncrement: Int = Character.charCount(codePoint)
 
         if (allowedCodePointPredicate(codePoint)) {
           acc.appendCodePoint(codePoint)
@@ -78,7 +79,7 @@ object PercentEncoder {
           appendByte(byte3)
           appendByte(byte4)
         }
-        loop(index + 1)
+        loop(index + indexIncrement)
       }
 
     loop(0)
