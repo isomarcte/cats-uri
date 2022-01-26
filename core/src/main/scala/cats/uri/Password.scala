@@ -14,7 +14,7 @@ import scala.collection.immutable.SortedSet
  *
  * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.1]]
  */
-sealed trait Password extends Product with Serializable {
+sealed abstract class Password extends Product with Serializable {
   def unsafeValue: String
 
   def render: String =

@@ -14,7 +14,7 @@ import scala.collection.immutable.SortedSet
  *
  * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.1]]
  */
-sealed trait User extends Product with Serializable {
+sealed abstract class User extends Product with Serializable {
   def value: String
 
   def render: String =

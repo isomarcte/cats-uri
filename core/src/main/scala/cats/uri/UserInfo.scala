@@ -41,7 +41,7 @@ import cats.uri.parsers._
  *
  * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.1]]
  */
-sealed trait UserInfo extends Product with Serializable {
+sealed abstract class UserInfo extends Product with Serializable {
 
   /**
    * The [[User]] defined in this [[UserInfo]].

@@ -35,7 +35,7 @@ import cats.uri.parsers._
  * @see
  *   [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.1]]
  */
-sealed trait Scheme extends Product with Serializable {
+sealed abstract class Scheme extends Product with Serializable {
   def value: CIString
 
   def render: String =
