@@ -15,7 +15,7 @@ ThisBuild / scalafixDependencies ++= List(
 )
 
 // Projects
-lazy val root = tlCrossRootProject.aggregate(core).settings(name := "cats-uri")
+lazy val root = tlCrossRootProject.aggregate(core, scalacheck, testing).settings(name := "cats-uri")
 
 lazy val core = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
