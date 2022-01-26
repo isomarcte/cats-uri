@@ -12,4 +12,8 @@ final class PercentEncoderTests extends ScalaCheckSuite {
       (decoded ?= Right(str)) :| s"PercentEncoded $str, bytes (${str.getBytes.toList}): $encoded"
     }
   }
+
+  test("% should always be encoded, even if the supplied predicate says it should not be."){
+    assertEquals(PercentEncoder.encode(_ => true)("%"), "%25")
+  }
 }

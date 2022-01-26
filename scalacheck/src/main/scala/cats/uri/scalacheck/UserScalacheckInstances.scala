@@ -29,3 +29,5 @@ private[scalacheck] trait UserScalacheckInstances {
   final implicit val cogenUser: Cogen[User] =
     Cogen[String].contramap(_.value)
 }
+
+private[scalacheck] object UserScalacheckInstances extends UserScalacheckInstances

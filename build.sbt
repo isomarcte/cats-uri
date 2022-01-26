@@ -8,7 +8,6 @@ ThisBuild / crossScalaVersions := Seq(Scala212, Scala213, Scala3)
 ThisBuild / scalaVersion := Scala213
 ThisBuild / tlBaseVersion := "0.0"
 
-
 // Scalafix
 
 ThisBuild / scalafixDependencies ++= List(

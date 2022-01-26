@@ -71,7 +71,7 @@ object PercentDecoder {
 
   private def utfBytesToString(nel: NonEmptyList[Byte]): Either[String, String] = {
     val builder: StringBuilder =
-      new StringBuilder()
+      new StringBuilder(nel.size * 2)
 
     @tailrec
     def loop(head: Byte, tail: List[Byte]): Either[String, String] = {
@@ -102,7 +102,7 @@ object PercentDecoder {
   }
 
   private val percentByteSubStringParser: Parser[String] =
-    percentByteParser.rep.backtrack.flatMap((nel: NonEmptyList[Byte]) =>
+    percentByteParser.rep.flatMap((nel: NonEmptyList[Byte]) =>
       utfBytesToString(nel).fold(
         e => Parser.failWith(e),
         Parser.pure
@@ -114,7 +114,13 @@ object PercentDecoder {
    */
   def decode(value: String): Either[String, String] =
     (percentByteSubStringParser | (Parser.anyChar *> Parser.charsWhile0(_ != '%')).string).repAs0[String].parseAll(value).fold(
-      e => Left(s"Decoding the percent encoded value failed. This likely means there was an invalid percent encoded byte sequence: ${e}"),
+      e => Left(s"Decoding the percent encoded value failed. This likely means there was an invalid percent encoded byte sequence or you have a literal '%' in the String which does not map to a percent encoded UTF-8 byte sequence: ${e}"),
       value => Right(value)
+    )
+
+  def unsafeDecode(value: String): String =
+    decode(value).fold(
+      e => throw new IllegalArgumentException(e),
+      identity
     )
 }

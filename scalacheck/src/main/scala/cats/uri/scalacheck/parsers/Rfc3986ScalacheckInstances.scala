@@ -44,6 +44,8 @@ object Rfc3986ScalacheckInstances {
   val genSubDelimString: Gen[String] =
     Gen.stringOf(genSubDelimChar)
 
+  // Generators for grammar modeled productions
+
   /**
    * Generates string which is a valid user from the userinfo section of the
    * authority of a URI.
@@ -59,8 +61,6 @@ object Rfc3986ScalacheckInstances {
         )
       ).map(_.mkString)
     )
-
-  // Generators for grammar modeled productions
 
   val genSchemeString: Gen[String] =
     for {

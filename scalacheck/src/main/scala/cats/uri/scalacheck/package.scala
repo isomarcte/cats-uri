@@ -17,8 +17,9 @@
 package cats.uri
 
 package object scalacheck {
-  object all extends SchemeScalacheckInstances with UserScalacheckInstances with PasswordScalacheckInstances
+  object all extends SchemeScalacheckInstances with UserScalacheckInstances with PasswordScalacheckInstances with UserInfoScalacheckInstances
   object scheme extends SchemeScalacheckInstances
   object user extends UserScalacheckInstances
   object password extends PasswordScalacheckInstances
+  object userinfo extends UserInfoScalacheckInstances
 }

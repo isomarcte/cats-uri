@@ -29,3 +29,5 @@ private[scalacheck] trait PasswordScalacheckInstances {
   final implicit val cogenPassword: Cogen[Password] =
     Cogen[String].contramap(_.unsafeValue)
 }
+
+private[scalacheck] object PasswordScalacheckInstances extends PasswordScalacheckInstances

@@ -19,35 +19,22 @@ package cats.uri.syntax
 import cats.uri._
 import org.typelevel.literally.Literally
 
-private[syntax] trait UserSyntax {
-  implicit class UserContext(val sc: StringContext) {
-    def user(args: Any*): User = macro UserSyntax.user.make
-
-    def userEncoded(args: Any*): User = macro UserSyntax.userEncoded.make
+private[syntax] trait UserInfoSyntax {
+  implicit class UserInfoContext(val sc: StringContext) {
+    def userInfoEncoded(args: Any*): UserInfo = macro UserInfoSyntax.userInfoEncoded.make
   }
 }
 
-private object UserSyntax {
+private object UserInfoSyntax {
 
-  private object user extends Literally[User] {
+  private object userInfoEncoded extends Literally[UserInfo] {
     def validate(c: Context)(s: String) = {
       import c.universe._
 
-      User.fromString(s).map(_ => c.Expr(q"User.unsafeFromString($s)"))
+      UserInfo.fromPercentEncodedString(s).map(_ => c.Expr(q"UserInfo.unsafeFromPercentEncodedString($s)"))
     }
 
-    def make(c: Context)(args: c.Expr[Any]*): c.Expr[User] =
-      apply(c)(args: _*)
-  }
-
-  private object userEncoded extends Literally[User] {
-    def validate(c: Context)(s: String) = {
-      import c.universe._
-
-      User.fromPercentEncodedString(s).map(_ => c.Expr(q"User.unsafeFromPercentEncodedString($s)"))
-    }
-
-    def make(c: Context)(args: c.Expr[Any]*): c.Expr[User] =
+    def make(c: Context)(args: c.Expr[Any]*): c.Expr[UserInfo] =
       apply(c)(args: _*)
   }
 }

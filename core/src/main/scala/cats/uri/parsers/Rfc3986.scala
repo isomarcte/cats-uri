@@ -114,8 +114,17 @@ object Rfc3986 {
   val userinfoPasswordStr: Parser0[String] =
     (unreservedChar | percentEncoded | subDelimsChar | Parser.char(':')).rep0.string
 
+  private def nonEmptyStringParser(p: Parser0[String]): Parser0[Option[String]] =
+    p.map(s =>
+      if (s.nonEmpty) {
+        Some(s)
+      } else {
+        None
+      }
+    )
+
   val userinfo: Parser0[(Option[String], Option[Unit], Option[String])] =
-    (userinfoUserStr.? ~ Parser.char(':').? ~ userinfoPasswordStr.?).map{
+    (nonEmptyStringParser(userinfoUserStr) ~ Parser.char(':').? ~ nonEmptyStringParser(userinfoPasswordStr)).map{
       case ((a, b), c) => (a, b, c)
     }
 }
