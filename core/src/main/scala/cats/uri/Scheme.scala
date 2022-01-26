@@ -38,7 +38,7 @@ import cats.uri.parsers._
 sealed abstract class Scheme extends Product with Serializable {
   def value: CIString
 
-  def render: String =
+  def renderAsString: String =
     value.toString
 
   // final //
@@ -72,7 +72,13 @@ object Scheme {
     Show.fromToString
 
   implicit val schemeRenderable: Renderable[Scheme] =
-    Renderable.instance(_.render)
+    new Renderable[Scheme] {
+      override def renderAsString(a: Scheme): String =
+        a.renderAsString
+
+      override def addToAppender(a: Scheme, appender: Renderable.Appender): Renderable.Appender =
+        appender.appendString(a.renderAsString)
+    }
 
   def unapply(value: Scheme): Some[CIString] =
     Some(value.value)

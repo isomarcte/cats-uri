@@ -15,10 +15,24 @@ import scala.collection.immutable.SortedSet
  * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.1]]
  */
 sealed abstract class User extends Product with Serializable {
+
+  /**
+   * The value of the user field.
+   *
+   * @note This value is ''not'' percent encoded and thus is ''not'' suitable
+   *       for rendering in the construction of Uri values. You should use
+   *       [[#encode]] to render this [[User]] as a percent encoded `String`.
+   */
   def value: String
 
-  def render: String =
+  /**
+   *
+   */
+  final def encode: String =
     PercentEncoder.encode(User.userCodepoints.contains)(value)
+
+  final def renderAsString: String =
+    encode
 
   override final def toString: String = s"User(value = ${value})"
 }
@@ -33,7 +47,10 @@ object User {
   implicit val userPercentEncoder: PercentEncoder[User] =
     new PercentEncoder[User] {
       override def encode(a: User): String =
-        a.render
+        a.encode
+
+      override def addToAppender(a: User, appender: Renderable.Appender): Renderable.Appender =
+        appender.appendString(a.encode)
     }
 
   implicit val hashAndOrderForUser: Hash[User] with Order[User] =

@@ -10,12 +10,19 @@ import java.nio.charset.StandardCharsets
 /**
  * A typeclass for percent encoding values.
  *
+ * The exact set of characters which are required to be percent encoded is
+ * dependent on the Uri component and the Uri scheme in play.
+ *
  * @see [[https://datatracker.ietf.org/doc/html/rfc3986#section-2.1]]
  */
 trait PercentEncoder[A] extends Renderable[A] { self =>
+
+  /**
+   * Encode the given value as a percent encoded `String`.
+   */
   def encode(a: A): String
 
-  override def renderAsString(a: A): String =
+  override final def renderAsString(a: A): String =
     encode(a)
 }
 

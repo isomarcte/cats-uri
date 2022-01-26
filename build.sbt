@@ -11,7 +11,8 @@ ThisBuild / tlBaseVersion := "0.0"
 // Scalafix
 
 ThisBuild / scalafixDependencies ++= List(
-  "com.github.liancheng " %% "organize-imports" % "0.4.4")
+  "org.typelevel" %% "simulacrum-scalafix" % "0.5.3"
+)
 
 // Projects
 lazy val root = tlCrossRootProject.aggregate(core).settings(name := "cats-uri")

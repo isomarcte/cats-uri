@@ -76,16 +76,19 @@ sealed abstract class UserInfo extends Product with Serializable {
    */
   def hasColonDelimiter: Boolean
 
-  def render: String = {
-    val colonString: String =
-      if (hasColonDelimiter) {
-        ":"
-      } else {
-        ""
-      }
+  /**
+   * Percent encode the value.
+   */
+  final def encode: String =
+    UserInfo.userInfoPercentEncoder.encode(this)
 
-    user.fold("")(_.render) ++ colonString ++ password.fold("")(_.render)
-  }
+  /**
+   * Render the value in the canonical `String` form. For types like
+   * [[UserInfo]] which also support percent encoding, this is just an alias
+   * for [[#encode]].
+   */
+  final def renderAsString: String =
+    encode
 
   override final def toString: String = s"UserInfo(user = ${user}, password = ${password}, hasColonDelimiter = ${hasColonDelimiter})"
 }
@@ -118,11 +121,29 @@ object UserInfo {
   implicit val showForUserInfo: Show[UserInfo] =
     Show.fromToString
 
-  implicit val userInfoPercentEncoder: PercentEncoder[UserInfo] =
+  implicit val userInfoPercentEncoder: PercentEncoder[UserInfo] = {
+    import Renderable._
+
     new PercentEncoder[UserInfo] {
-      override def encode(a: UserInfo): String =
-        a.render
+      override def encode(a: UserInfo): String = {
+        val allocationForColon: Int = if (a.hasColonDelimiter) { 1 } else { 0 }
+        val sizeHint: Int = (a.user.fold(0)(_.value.size) + a.password.fold(0)(_.unsafeValue.size) + allocationForColon) * 2
+        val appender: Renderable.Appender = Renderable.Appender.instance(sizeHint)
+
+        addToAppender(a, appender).renderAsString
+      }
+
+      override def addToAppender(a: UserInfo, appender: Appender): Appender = {
+        a.user.foreach(user => PercentEncoder[User].addToAppender(user, appender))
+        if (a.hasColonDelimiter) {
+          appender.appendChar(':')
+        }
+        a.password.foreach(password => PercentEncoder[Password].addToAppender(password, appender))
+
+        appender
+      }
     }
+  }
 
   /**
    * [[UserInfo]] with no username or password, but with a ':' character,
@@ -131,9 +152,28 @@ object UserInfo {
   val OnlyColonDelimiter: UserInfo =
     UserInfoImpl(None, None, true)
 
+  /**
+   * Create a [[UserInfo]] from a [[User]] with an optional colon delimiter.
+   *
+   * {{{
+   * scala> import cats.uri._, cats.uri.syntax.all._
+   *
+   * scala> UserInfo(user"user", true).encode
+   * val res0: String = user:
+   *
+   * scala> UserInfo(user"user", false).encode
+   * val res1: String = user
+   * }}}
+   */
   def apply(user: User, hasColonDelimiter: Boolean): UserInfo =
     UserInfoImpl(Some(user), None, hasColonDelimiter)
 
+  /**
+   * Create a [[UserInfo]] from a [[User]].
+   *
+   * [[UserInfo]] values created via this method ''will not'' have a colon
+   * delimiter.
+   */
   def apply(user: User): UserInfo =
     apply(user, false)
 

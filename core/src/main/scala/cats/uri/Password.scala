@@ -17,8 +17,11 @@ import scala.collection.immutable.SortedSet
 sealed abstract class Password extends Product with Serializable {
   def unsafeValue: String
 
-  def render: String =
+  def encode: String =
     PercentEncoder.encode(Password.passwordCodepoints.contains)(unsafeValue)
+
+  def renderAsString: String =
+    encode
 
   override final def toString: String = "Password(<REDACTED>)"
 }
@@ -33,7 +36,10 @@ object Password {
   implicit val passwordPercentEncoder: PercentEncoder[Password] =
     new PercentEncoder[Password] {
       override def encode(a: Password): String =
-        a.render
+        a.encode
+
+      override def addToAppender(a: Password, appender: Renderable.Appender): Renderable.Appender =
+        appender.appendString(a.encode)
     }
 
   implicit val hashAndOrderForPassword: Hash[Password] with Order[Password] =

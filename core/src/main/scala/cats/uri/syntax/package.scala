@@ -17,9 +17,10 @@
 package cats.uri
 
 package object syntax {
-  object all extends syntax.SchemeSyntax with syntax.UserSyntax with syntax.PasswordSyntax with syntax.UserInfoSyntax
-  object scheme extends syntax.SchemeSyntax
-  object user extends syntax.UserSyntax
-  object password extends syntax.PasswordSyntax
-  object userinfo extends syntax.UserInfoSyntax
+  object all extends SchemeSyntax with UserSyntax with PasswordSyntax with UserInfoSyntax with RenderableSyntax
+  object scheme extends SchemeSyntax
+  object user extends UserSyntax
+  object password extends PasswordSyntax
+  object userinfo extends UserInfoSyntax
+  object renderable extends RenderableSyntax
 }
