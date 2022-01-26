@@ -26,11 +26,15 @@ sealed abstract class User extends Product with Serializable {
   def value: String
 
   /**
-   *
+   * The percent encoded representation of a [[User]].
    */
   final def encode: String =
     PercentEncoder.encode(User.userCodepoints.contains)(value)
 
+  /**
+   * The [[User]] rendered in the canonical `String` format. This is an
+   * alias for [[#encode]].
+   */
   final def renderAsString: String =
     encode
 
@@ -68,6 +72,10 @@ object User {
   implicit val showForUser: Show[User] =
     Show.fromToString
 
+  /**
+   * Attempt to create a [[User]] from a `String`. [[User]] values must be
+   * non-empty to disambiguate them from `Option[User]`.
+   */
   def fromString(value: String): Either[String, User] =
     if (value.length > 0) {
       Right(UserImpl(value))
@@ -75,15 +83,32 @@ object User {
       Left("User values can not be the empty string.")
     }
 
+  /**
+   * Attempt to create a [[User]] from a percent encoded
+   * `String`. [[User]] values must be non-empty to disambiguate them from
+   * `Option[User]`.
+   */
   def fromPercentEncodedString(value: String): Either[String, User] =
     PercentDecoder.decode(value).flatMap(fromString)
 
+  /**
+   * As [[#fromString]], but will throw on invalid `Strings`.
+   *
+   * @note In general, it is recommended that you not use this method outside
+   *   of test code or the REPL.
+   */
   def unsafeFromString(value: String): User =
     fromString(value).fold(
       e => throw new IllegalArgumentException(e),
       identity
     )
 
+  /**
+   * As [[#fromPercentEncodedString]], but will throw on invalid `Strings`.
+   *
+   * @note In general, it is recommended that you not use this method outside
+   *   of test code or the REPL.
+   */
   def unsafeFromPercentEncodedString(value: String): User =
     fromPercentEncodedString(value).fold(
       e => throw new IllegalArgumentException(e),

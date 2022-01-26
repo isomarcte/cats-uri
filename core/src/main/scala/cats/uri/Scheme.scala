@@ -28,6 +28,9 @@ import cats.uri.parsers._
  *
  * Schemes are case-insensitive, but are canonically shown as lower case.
  *
+ * @note Unlike many Uri components, [[Scheme]] values should not be percent
+ *       encoded.
+ *
  * {{{
  * scheme      = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
  * }}}
@@ -38,12 +41,13 @@ import cats.uri.parsers._
 sealed abstract class Scheme extends Product with Serializable {
   def value: CIString
 
-  def renderAsString: String =
-    value.toString
+  /**
+   * Render the value in the canonical `String` form.
+   */
+  final def renderAsString: String =
+    value.toString.toLowerCase
 
-  // final //
-
-  override final def toString: String = s"Scheme(value = ${toString})"
+  override final def toString: String = s"Scheme(value = ${renderAsString})"
 }
 
 object Scheme {
@@ -121,15 +125,6 @@ object Scheme {
    */
   val ianaSchemes: SortedSet[Scheme] =
     ianaSchemeMapping.foldMap(value => SortedSet(value))
-
-  def Http: Scheme =
-    SchemeImpl.from("http")
-
-  def Https: Scheme =
-    SchemeImpl.from("https")
-
-  def File: Scheme =
-    SchemeImpl.from("file")
 
   /**
    * Attempt to create a [[Scheme]] from a `String`.

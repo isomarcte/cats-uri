@@ -37,33 +37,57 @@ object Renderable {
   sealed abstract class Appender {
     protected def stringBuilder: StringBuilder
 
+    /**
+     * Append the given unicode codepoint to the [[Appender]].
+     */
     final def appendCodePoint(value: Int): Appender = {
       stringBuilder.appendCodePoint(value)
       this
     }
 
+    /**
+     * Append the given `String` to the [[Appender]].
+     */
     final def appendString(value: String): Appender = {
       stringBuilder.append(value)
       this
     }
 
+    /**
+     * Append the given `Char` to the [[Appender]].
+     */
     final def appendChar(value: Char): Appender = {
       stringBuilder.append(value)
       this
     }
 
+    /**
+     * Render the current value of the [[Appender]] to a `String`.
+     */
     final def renderAsString: String =
       stringBuilder.toString
   }
 
   object Appender {
 
+    /**
+     * Create a new empty [[Appender]] value with the given size hint for the
+     * pre-allocated buffer.
+     */
     def instance(sizeHint: Int): Appender =
       new Appender {
         override val stringBuilder: StringBuilder = new StringBuilder(sizeHint)
       }
 
+    /**
+     * Create a new empty [[Appender]] value.
+     *
+     * @note If you have a notion of the size of the output, you might
+     *       consider using the constructor which takes a size hint.
+     */
     def instance: Appender =
-      instance(0)
+      new Appender {
+        override val stringBuilder: StringBuilder = new StringBuilder()
+      }
   }
 }

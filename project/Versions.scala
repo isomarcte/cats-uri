@@ -8,4 +8,5 @@ object Versions {
   val literallyV: String = "1.0.2"
   val munitV: String = "0.7.29"
   val scalacheckV: String = "1.15.4"
+  val guavaV: String = "31.0.1-jre"
 }

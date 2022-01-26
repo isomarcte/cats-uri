@@ -56,7 +56,7 @@ lazy val scalacheck = crossProject(JVMPlatform, JSPlatform)
   .in(file("scalacheck"))
   .settings(
     libraryDependencies ++= Seq(
-      "org.scalacheck" %% "scalacheck" % V.scalacheckV
+      "org.scalacheck" %%% "scalacheck" % V.scalacheckV
     ),
     console / initialCommands := {
       val wildcard: String =
@@ -83,9 +83,9 @@ lazy val testing = crossProject(JVMPlatform, JSPlatform)
   .in(file("testing"))
   .settings(
     libraryDependencies ++= Seq(
-      "org.scalameta" %% "munit-scalacheck" % V.munitV,
-      "org.typelevel" %% "cats-kernel-laws" % V.catsV,
-      "org.typelevel" %% "discipline-munit" % V.disciplineMunitV
+      "org.scalameta"    %%% "munit-scalacheck" % V.munitV,
+      "org.typelevel"    %%% "cats-kernel-laws" % V.catsV,
+      "org.typelevel"    %%% "discipline-munit" % V.disciplineMunitV
     ).map(_ % Test),
     console / initialCommands := {
       val wildcard: String =
@@ -102,6 +102,10 @@ lazy val testing = crossProject(JVMPlatform, JSPlatform)
         "org.scalacheck.",
         "cats.uri.scalacheck.all.").map(value => s"import ${value}${wildcard}").mkString("\n")
     }
+  ).jvmSettings(
+    libraryDependencies ++= List(
+      "com.google.guava" % "guava" % V.guavaV
+    ).map(_ % Test)
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }

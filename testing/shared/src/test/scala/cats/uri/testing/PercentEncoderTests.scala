@@ -4,7 +4,7 @@ import org.scalacheck.Prop._
 import munit._
 import cats.uri._
 
-final class PercentEncoderTests extends ScalaCheckSuite {
+final class PercentEncoderTests extends PercentEncoderPlatformTests {
   property("Any String should able to be percent encoded"){
     forAll{(pred: Int => Boolean, str: String) =>
       val encoded: String = PercentEncoder.encode(pred)(str)

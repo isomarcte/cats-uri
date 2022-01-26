@@ -26,7 +26,29 @@ object PercentDecoder {
         ((hexCharToInt(a) << 4) | hexCharToInt(b)).toByte
     }
 
-  private def utf8ByteLength(b: Byte): Int =
+  /**
+   * Parse of sequence of bytes as a UTF-8 encoded `String`.
+   *
+   * Why not use `new String(bytes, "UTF-8")`? `new String` will replace
+   * invalid byte sequences with the Unicode replacement character. This is
+   * the recommended way to handle invalid byte sequences by the Unicode
+   * specification, but in the specific sub-domain of URI parsing is not what
+   * we want. Replacing invalid byte sequences creates ambiguity when
+   * attempting to encode a URI with an ''intentionally'' encoded Unicode
+   * replacement character, \ufffd. This effectively changes the Uri. Further,
+   * other implementations also yield errors on invalid byte sequences.
+   *
+   * {{{
+   * > decodeURIComponent("%F4%90%bf%bf")
+   * Uncaught URIError: URI malformed
+   *   at decodeURIComponent (<anonymous>)
+   * }}}
+   */
+  private def utfBytesToString(nel: NonEmptyList[Byte]): Either[String, String] = {
+    val builder: StringBuilder =
+      new StringBuilder(nel.size * 2)
+
+    def utf8ByteLength(b: Byte): Int =
     if ((b & 0xe0) == 0xc0) {
       2
     } else if ((b & 0xf0) == 0xe0) {
@@ -39,7 +61,7 @@ object PercentDecoder {
       1
     }
 
-  private def decodeToCodePoint(bytes: List[Byte]): Either[String, Int] =
+    def decodeToCodePoint(bytes: List[Byte]): Either[String, Int] =
     bytes match {
       case a :: Nil =>
         if ((a & 0x80) == 0) {
@@ -68,10 +90,6 @@ object PercentDecoder {
       case _ =>
         throw new AssertionError(s"Invalid byte sequence length for UTF-8: ${bytes.size}. This is a cats-uri bug.")
     }
-
-  private def utfBytesToString(nel: NonEmptyList[Byte]): Either[String, String] = {
-    val builder: StringBuilder =
-      new StringBuilder(nel.size * 2)
 
     @tailrec
     def loop(head: Byte, tail: List[Byte]): Either[String, String] = {
@@ -114,7 +132,7 @@ object PercentDecoder {
    */
   def decode(value: String): Either[String, String] =
     (percentByteSubStringParser | (Parser.anyChar *> Parser.charsWhile0(_ != '%')).string).repAs0[String].parseAll(value).fold(
-      e => Left(s"Decoding the percent encoded value failed. This likely means there was an invalid percent encoded byte sequence or you have a literal '%' in the String which does not map to a percent encoded UTF-8 byte sequence: ${e}"),
+      e => Left(s"Decoding the percent encoded value failed. This likely means there was an invalid percent encoded byte sequence or you have a literal '%' in the String which does not map to a percent encoded UTF-8 byte sequence"),
       value => Right(value)
     )
 
