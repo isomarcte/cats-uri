@@ -6,7 +6,7 @@ import munit._
 import cats.uri._
 import scala.collection.immutable.BitSet
 
-final class PercentDecoderTests extends ScalaCheckSuite {
+final class PercentDecoderTests extends PercentDecoderPlatformTests {
   test("PercentDecoder.decode should decode the empty string"){
     assertEquals(PercentDecoder.decode(""), Right(""))
   }
