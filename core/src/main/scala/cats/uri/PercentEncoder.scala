@@ -3,9 +3,9 @@ package cats.uri
 import cats.syntax.all._
 import java.nio.CharBuffer
 import java.nio.charset.CharsetEncoder
+import java.nio.charset.StandardCharsets
 import java.lang.StringBuilder
 import scala.annotation.tailrec
-import java.nio.charset.StandardCharsets
 
 /**
  * A typeclass for percent encoding values.
@@ -32,6 +32,9 @@ object PercentEncoder {
 
   private val PercentUnicodeCodePoint: Int = 0x25
 
+  private val HexChars: Array[Char] =
+    "0123456789ABCDEF".toArray
+
   /**
    * Percent encode a `String` value.
    *
@@ -53,22 +56,15 @@ object PercentEncoder {
    */
   def encode(allowedCodePointPredicate: Int => Boolean)(value: String): String = {
     val len: Int = value.length
-    val acc: StringBuilder = new StringBuilder(value.length * 2)
-
-    def intToHexChar(i: Int): Char =
-      i match {
-        case i if i >= 0 && i <= 9 =>
-          (i + '0'.toInt).toChar
-        case i if i >= 10 && i <= 15 =>
-          ('A'.toInt + i - 10).toChar
-        case _ =>
-          throw new AssertionError(s"Can not convert $i to a hex char. This is a cats-uri bug.")
-      }
+    val acc: StringBuilder = new StringBuilder(len * 3)
+    val buffer: CharBuffer = CharBuffer.allocate(12)
 
     def appendByte(byte: Int): Unit = {
-      acc.append('%')
-      acc.append(intToHexChar(byte >> 4 & 0x0f))
-      acc.append(intToHexChar(byte & 0x0f))
+      buffer.put('%')
+      buffer.put(HexChars(byte >> 4 & 0x0f))
+      buffer.put(HexChars(byte & 0x0f))
+      // acc.append(HexChars(byte >> 4 & 0x0f))
+      // acc.append(HexChars(byte & 0x0f))
     }
 
     @tailrec
@@ -77,38 +73,50 @@ object PercentEncoder {
         acc.toString()
       } else {
         val codePoint: Int = value.codePointAt(index)
-        val indexIncrement: Int = Character.charCount(codePoint)
+        val indexIncrement: Int = if (codePoint >= 0x10000) 2 else 1
 
-        if (codePoint =!= PercentUnicodeCodePoint && allowedCodePointPredicate(codePoint)) {
+        if (allowedCodePointPredicate(codePoint) && codePoint != PercentUnicodeCodePoint) {
           acc.appendCodePoint(codePoint)
-        } else if (codePoint < 0x80) {
-          // 1 byte
-          appendByte(codePoint)
-        } else if (codePoint < 0x800) {
-          // 2 bytes
-          val byte1: Int = codePoint >> 6 | 0xc0
-          val byte2: Int = (codePoint & 0x3f) | 0x80
-          appendByte(byte1)
-          appendByte(byte2)
-        } else if (codePoint < 0x10000) {
-          // 3 bytes
-          val byte1: Int = codePoint >> 12 | 0xe0
-          val byte2: Int = (codePoint >> 6 & 0x3f) | 0x80
-          val byte3: Int = (codePoint & 0x3f) | 0x80
-          appendByte(byte1)
-          appendByte(byte2)
-          appendByte(byte3)
         } else {
-          // 4 bytes
-          val byte1: Int = codePoint >> 18 | 0xf0
-          val byte2: Int = (codePoint >> 12 & 0x3f) | 0x80
-          val byte3: Int = (codePoint >> 6 & 0x3f) | 0x80
-          val byte4: Int = (codePoint & 0x3f) | 0x80
-          appendByte(byte1)
-          appendByte(byte2)
-          appendByte(byte3)
-          appendByte(byte4)
+          buffer.clear
+          if (codePoint < 0x80) {
+            // 1 byte
+            appendByte(codePoint)
+            buffer.flip
+            acc.append(buffer, 0, 3)
+          } else if (codePoint < 0x800) {
+            // 2 bytes
+            val byte1: Int = codePoint >> 6 | 0xc0
+            val byte2: Int = (codePoint & 0x3f) | 0x80
+            appendByte(byte1)
+            appendByte(byte2)
+            buffer.flip
+            acc.append(buffer, 0, 6)
+          } else if (codePoint < 0x10000) {
+            // 3 bytes
+            val byte1: Int = codePoint >> 12 | 0xe0
+            val byte2: Int = (codePoint >> 6 & 0x3f) | 0x80
+            val byte3: Int = (codePoint & 0x3f) | 0x80
+            appendByte(byte1)
+            appendByte(byte2)
+            appendByte(byte3)
+            buffer.flip
+            acc.append(buffer, 0, 9)
+          } else {
+            // 4 bytes
+            val byte1: Int = codePoint >> 18 | 0xf0
+            val byte2: Int = (codePoint >> 12 & 0x3f) | 0x80
+            val byte3: Int = (codePoint >> 6 & 0x3f) | 0x80
+            val byte4: Int = (codePoint & 0x3f) | 0x80
+            appendByte(byte1)
+            appendByte(byte2)
+            appendByte(byte3)
+            appendByte(byte4)
+            buffer.flip
+            acc.append(buffer, 0, 12)
+          }
         }
+
         loop(index + indexIncrement)
       }
 

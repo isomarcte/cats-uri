@@ -12,7 +12,7 @@ private[testing] abstract class PercentEncoderPlatformTests extends ScalaCheckSu
 
   property("PercentEncoder.encode should agree with Guava's PercentEscaper"){
     forAll{(str: String) =>
-      PercentEncoder.encode(c => guavaCharacterSetCodePoints.contains(c))(str) =? minimalGuavaEncoder.escape(str)
+      PercentEncoder.encode(c => guavaCharacterSetCodePoints.contains(c))(str) ?= minimalGuavaEncoder.escape(str)
     }
   }
 }

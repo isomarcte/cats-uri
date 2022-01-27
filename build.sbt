@@ -15,17 +15,17 @@ ThisBuild / scalafixDependencies ++= List(
 )
 
 // Projects
-lazy val root = tlCrossRootProject.aggregate(core, scalacheck, testing).settings(name := "cats-uri")
+lazy val root = tlCrossRootProject.aggregate(core, scalacheck, testing, benchmarks).settings(name := "cats-uri")
 
 lazy val core = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("core"))
   .settings(
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "case-insensitive" % V.caseInsensitiveV,
-      "org.typelevel" %% "cats-core" % V.catsV,
-      "org.typelevel" %% "cats-parse" % V.catsParseV,
-      "org.typelevel" %% "literally" % V.literallyV
+      "org.typelevel" %%% "case-insensitive" % V.caseInsensitiveV,
+      "org.typelevel" %%% "cats-core" % V.catsV,
+      "org.typelevel" %%% "cats-parse" % V.catsParseV,
+      "org.typelevel" %%% "literally" % V.literallyV
     ),
     libraryDependencies ++= {
       // Needed for macros
@@ -83,6 +83,7 @@ lazy val testing = crossProject(JVMPlatform, JSPlatform)
   .in(file("testing"))
   .settings(
     libraryDependencies ++= Seq(
+      "org.http4s"       %%% "http4s-core" % "0.23.8",
       "org.scalameta"    %%% "munit-scalacheck" % V.munitV,
       "org.typelevel"    %%% "cats-kernel-laws" % V.catsV,
       "org.typelevel"    %%% "discipline-munit" % V.disciplineMunitV
@@ -112,5 +113,13 @@ lazy val testing = crossProject(JVMPlatform, JSPlatform)
   )
   .enablePlugins(NoPublishPlugin)
   .dependsOn(scalacheck % "test -> compile")
+
+lazy val benchmarks = project.in(file("benchmarks")).settings(
+  libraryDependencies ++= List(
+    "com.google.guava" % "guava" % V.guavaV,
+    "org.scalacheck" %%% "scalacheck" % V.scalacheckV,
+    "org.http4s"       %%% "http4s-core" % "0.23.8"
+  )
+).dependsOn(core.jvm).enablePlugins(NoPublishPlugin, JmhPlugin)
 
 lazy val site = project.in(file("site")).enablePlugins(TypelevelSitePlugin).dependsOn(core.jvm)

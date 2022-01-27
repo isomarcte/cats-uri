@@ -39,7 +39,7 @@ object PercentDecoder {
    * other implementations also yield errors on invalid byte sequences.
    *
    * {{{
-   * > decodeURIComponent("%F4%90%bf%bf")
+   * > decodeURIComponent("%F4%90%BF%BF")
    * Uncaught URIError: URI malformed
    *   at decodeURIComponent (<anonymous>)
    * }}}

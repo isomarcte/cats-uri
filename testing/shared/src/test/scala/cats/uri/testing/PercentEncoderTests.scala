@@ -16,4 +16,11 @@ final class PercentEncoderTests extends PercentEncoderPlatformTests {
   test("% should always be encoded, even if the supplied predicate says it should not be."){
     assertEquals(PercentEncoder.encode(_ => true)("%"), "%25")
   }
+
+  property("http4s"){
+    import org.http4s.Uri
+    forAll{(str: String) =>
+      Uri.encode(str, java.nio.charset.StandardCharsets.UTF_8, false, _ => false) =? PercentEncoder.encodeAll(str)
+    }
+  }
 }
