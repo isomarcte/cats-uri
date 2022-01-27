@@ -1,7 +1,8 @@
 package cats.uri
 
+import cats.data._
 import cats.syntax.all._
-import java.nio.CharBuffer
+import java.nio.IntBuffer
 import java.nio.charset.CharsetEncoder
 import java.nio.charset.StandardCharsets
 import java.lang.StringBuilder
@@ -35,6 +36,9 @@ object PercentEncoder {
   private val HexChars: Array[Char] =
     "0123456789ABCDEF".toArray
 
+  private val HexCharCodePoints: Array[Int] =
+    HexChars.map(_.toInt)
+
   /**
    * Percent encode a `String` value.
    *
@@ -56,64 +60,60 @@ object PercentEncoder {
    */
   def encode(allowedCodePointPredicate: Int => Boolean)(value: String): String = {
     val len: Int = value.length
-    val acc: StringBuilder = new StringBuilder(len * 3)
-    val buffer: CharBuffer = CharBuffer.allocate(12)
-
-    def appendByte(byte: Int): Unit = {
-      buffer.put('%')
-      buffer.put(HexChars(byte >> 4 & 0x0f))
-      buffer.put(HexChars(byte & 0x0f))
-      // acc.append(HexChars(byte >> 4 & 0x0f))
-      // acc.append(HexChars(byte & 0x0f))
-    }
+    val buffer: IntBuffer = IntBuffer.allocate(value.codePointCount(0, len) * 12)
 
     @tailrec
     def loop(index: Int): String =
       if (index >= len) {
-        acc.toString()
+        val count: Int = buffer.position()
+        buffer.flip
+        new String(buffer.array, 0, count)
       } else {
         val codePoint: Int = value.codePointAt(index)
         val indexIncrement: Int = if (codePoint >= 0x10000) 2 else 1
 
         if (allowedCodePointPredicate(codePoint) && codePoint != PercentUnicodeCodePoint) {
-          acc.appendCodePoint(codePoint)
+          buffer.put(codePoint)
         } else {
-          buffer.clear
           if (codePoint < 0x80) {
             // 1 byte
-            appendByte(codePoint)
-            buffer.flip
-            acc.append(buffer, 0, 3)
+            buffer.put(Array(PercentUnicodeCodePoint, HexCharCodePoints(codePoint >> 4 & 0x0f), HexCharCodePoints(codePoint & 0x0f)))
           } else if (codePoint < 0x800) {
             // 2 bytes
             val byte1: Int = codePoint >> 6 | 0xc0
             val byte2: Int = (codePoint & 0x3f) | 0x80
-            appendByte(byte1)
-            appendByte(byte2)
-            buffer.flip
-            acc.append(buffer, 0, 6)
-          } else if (codePoint < 0x10000) {
+            buffer.put(
+              Array(
+                PercentUnicodeCodePoint, HexCharCodePoints(byte1 >> 4 & 0x0f), HexCharCodePoints(byte1 & 0x0f),
+                PercentUnicodeCodePoint, HexCharCodePoints(byte2 >> 4 & 0x0f), HexCharCodePoints(byte2 & 0x0f)
+              )
+            )
+         } else if (codePoint < 0x10000) {
             // 3 bytes
             val byte1: Int = codePoint >> 12 | 0xe0
             val byte2: Int = (codePoint >> 6 & 0x3f) | 0x80
             val byte3: Int = (codePoint & 0x3f) | 0x80
-            appendByte(byte1)
-            appendByte(byte2)
-            appendByte(byte3)
-            buffer.flip
-            acc.append(buffer, 0, 9)
+            buffer.put(
+              Array(
+                PercentUnicodeCodePoint, HexCharCodePoints(byte1 >> 4 & 0x0f), HexCharCodePoints(byte1 & 0x0f),
+                PercentUnicodeCodePoint, HexCharCodePoints(byte2 >> 4 & 0x0f), HexCharCodePoints(byte2 & 0x0f),
+                PercentUnicodeCodePoint, HexCharCodePoints(byte3 >> 4 & 0x0f), HexCharCodePoints(byte3 & 0x0f)
+              )
+            )
           } else {
             // 4 bytes
             val byte1: Int = codePoint >> 18 | 0xf0
             val byte2: Int = (codePoint >> 12 & 0x3f) | 0x80
             val byte3: Int = (codePoint >> 6 & 0x3f) | 0x80
             val byte4: Int = (codePoint & 0x3f) | 0x80
-            appendByte(byte1)
-            appendByte(byte2)
-            appendByte(byte3)
-            appendByte(byte4)
-            buffer.flip
-            acc.append(buffer, 0, 12)
+            buffer.put(
+              Array(
+                PercentUnicodeCodePoint, HexCharCodePoints(byte1 >> 4 & 0x0f), HexCharCodePoints(byte1 & 0x0f),
+                PercentUnicodeCodePoint, HexCharCodePoints(byte2 >> 4 & 0x0f), HexCharCodePoints(byte2 & 0x0f),
+                PercentUnicodeCodePoint, HexCharCodePoints(byte3 >> 4 & 0x0f), HexCharCodePoints(byte3 & 0x0f),
+                PercentUnicodeCodePoint, HexCharCodePoints(byte4 >> 4 & 0x0f), HexCharCodePoints(byte4 & 0x0f)
+              )
+            )
           }
         }
 
