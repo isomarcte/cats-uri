@@ -63,6 +63,18 @@ object PercentDecoder {
         Int.MaxValue
       }
 
+    def decodeUtf8BytesToCodePoint: Unit =
+      utf8ByteSequenceLen match {
+        case 2 =>
+          out.put(Character.toChars(((utf8ByteSequenceBuffer(0) & 0x1f) << 6) | (utf8ByteSequenceBuffer(1) & 0x3f)))
+        case 3 =>
+          out.put(Character.toChars(((utf8ByteSequenceBuffer(0) & 0x0f) << 12) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 6) | (utf8ByteSequenceBuffer(2) & 0x3f)))
+        case 4 =>
+          out.put(Character.toChars(((utf8ByteSequenceBuffer(0) & 0x07) << 18) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 12) | ((utf8ByteSequenceBuffer(2) & 0x3f) << 6) | (utf8ByteSequenceBuffer(3) & 0x3f)))
+        case n =>
+          error = s"Attempting to decode ${n} bytes, but was expected 2, 3, or 4. This is a cats-uri bug."
+      }
+
     while (in.hasRemaining && (error eq null)) {
       val next: Char = in.get()
       state match {
@@ -121,7 +133,7 @@ object PercentDecoder {
               utf8ByteSequenceBuffer(utf8ByteSequencePosition) = utf8ByteSequenceBuffer(utf8ByteSequencePosition) | low
               if (utf8ByteSequencePosition >= (utf8ByteSequenceLen - 1)) {
                 // Completed byte sequence
-                out.put(StandardCharsets.UTF_8.decode(ByteBuffer.wrap(utf8ByteSequenceBuffer.map(_.toByte), 0, utf8ByteSequenceLen)))
+                decodeUtf8BytesToCodePoint
                 state = Empty
               } else {
                 utf8ByteSequencePosition += 1

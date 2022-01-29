@@ -24,6 +24,9 @@ class PercentDecodingBenchmark {
   def encodeString(value: String): String =
     PercentEncoder.encodeAll(value)
 
+  def encodeMin(value: String): String =
+    PercentEncoder.encodeMinimal(value)
+
   @Benchmark
   def catsUriPercentDecoder: Either[String, String] = {
     PercentDecoder.decode(encodeString(generateString))
@@ -43,5 +46,26 @@ class PercentDecodingBenchmark {
   def http4sUriDecoder: String = {
     import org.http4s.Uri
     Uri.decode(encodeString(generateString))
+  }
+
+  @Benchmark
+  def catsUriPercentDecoderMin: Either[String, String] = {
+    PercentDecoder.decode(encodeMin(generateString))
+  }
+
+  @Benchmark
+  def catsUriPercentDecoder3Min: Either[String, String] = {
+    PercentDecoder.decode3(encodeMin(generateString))
+  }
+
+  @Benchmark
+  def javaStandardLibPercentDecoderMin: String = {
+    java.net.URLDecoder.decode(encodeMin(generateString), "UTF-8")
+  }
+
+  @Benchmark
+  def http4sUriDecoderMin: String = {
+    import org.http4s.Uri
+    Uri.decode(encodeMin(generateString))
   }
 }
