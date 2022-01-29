@@ -10,15 +10,160 @@ import cats.uri.parsers._
 import scala.annotation.tailrec
 import java.nio.charset.StandardCharsets
 import java.nio.IntBuffer
+import java.nio.ByteBuffer
 
 object PercentDecoder {
 
   private val PercentUnicodeCodePoint: Int = 0x25
 
+  private sealed trait DecodeFSM extends Product with Serializable
+
+  private object DecodeFSM {
+    case object Empty extends DecodeFSM
+    case object ReadLeadingHexByteHi extends DecodeFSM
+    case object ReadLeadingHexByteLow extends DecodeFSM
+    case object ReadPercent extends DecodeFSM
+    case object ReadHexByteHi extends DecodeFSM
+    case object ReadHexByteLow extends DecodeFSM
+  }
+
+  def decode(value: String): Either[String, String] = {
+    val Empty = 0
+    val ReadLeadingHexByteHi = 1
+    val ReadLeadingHexByteLow = 2
+    val ReadPercent = 3
+    val ReadHexByteHi = 4
+    val ReadHexByteLow = 5
+
+    val len: Int = value.length
+    val in: CharBuffer = CharBuffer.wrap(value)
+    val out: CharBuffer = CharBuffer.allocate(len)
+    val utf8ByteSequenceBuffer: Array[Int] = new Array(4)
+    var utf8ByteSequenceLen: Int = -1
+    var utf8ByteSequencePosition: Int = -1
+    var error: String = null
+    var state: Int = Empty
+
+    def hexCharToByte(char: Char): Int =
+      char match {
+        case c if c >= '0' && c <= '9' => (c - '0')
+        case c if c >= 'A' && c <= 'F' => 10 + (c - 'A')
+        case c if c >= 'a' && c <= 'f' => 10 + (c - 'a')
+        case _ =>
+          error = s"Character represented by unicode codepoint ${char} is not a valid hex character."
+          Int.MaxValue
+      }
+
+    def utf8ByteLength(b: Int): Int =
+      if (b < 0x80) {
+        1
+      } else if ((b & 0xe0) == 0xc0) {
+        2
+      } else if ((b & 0xf0) == 0xe0) {
+        3
+      } else if ((b & 0xf8) == 0xf0) {
+        4
+      } else {
+        error = s"Found a percent encoded sequence but it does not corrispond to any valud UTF-8 leading byte."
+        Int.MaxValue
+      }
+
+    while (in.hasRemaining && (error eq null)) {
+      val next: Char = in.get()
+      state match {
+        case Empty =>
+          next match {
+            case PercentUnicodeCodePoint =>
+              state = ReadLeadingHexByteHi
+            case otherwise =>
+              out.put(otherwise)
+          }
+        case ReadLeadingHexByteHi =>
+          utf8ByteSequenceBuffer(0) = hexCharToByte(next) << 4
+          state = ReadLeadingHexByteLow
+        case ReadLeadingHexByteLow =>
+          hexCharToByte(next) match {
+            case Int.MaxValue =>
+              ()
+            case low =>
+              val byte1 = utf8ByteSequenceBuffer(0) | low
+              utf8ByteLength(byte1) match {
+                case Int.MaxValue =>
+                  ()
+                case 1 =>
+                  // We don't need to validate this case because it is
+                  // validated implicitly by utf8ByteLength
+                  out.put(byte1.toChar)
+                  state = Empty
+                case n =>
+                  utf8ByteSequenceBuffer(0) = byte1
+                  utf8ByteSequenceLen = n
+                  utf8ByteSequencePosition = 1
+                  state = ReadPercent
+              }
+          }
+        case ReadPercent =>
+          next match {
+            case PercentUnicodeCodePoint =>
+              state = ReadHexByteHi
+            case otherwise =>
+              error = s"Expected '%' character to complete multibyte UTF-8 sequence, but got: ${otherwise}."
+          }
+        case ReadHexByteHi =>
+          (hexCharToByte(next) << 4) match {
+            case hi if (hi & 0xc0) == 0x80 =>
+              // All non-leading UTF-8 bytes must be less than 0xc0
+              utf8ByteSequenceBuffer(utf8ByteSequencePosition) = hi
+            case otherwise =>
+              error = s"Invalid non-leading UTF-8 byte value $otherwise (upper 4 bits only). All non-leading UTF-8 byte values must be < 0xc0."
+          }
+          state = ReadHexByteLow
+        case ReadHexByteLow =>
+          hexCharToByte(next) match {
+            case Int.MaxValue =>
+              ()
+            case low =>
+              utf8ByteSequenceBuffer(utf8ByteSequencePosition) = utf8ByteSequenceBuffer(utf8ByteSequencePosition) | low
+              if (utf8ByteSequencePosition >= (utf8ByteSequenceLen - 1)) {
+                // Completed byte sequence
+                out.put(StandardCharsets.UTF_8.decode(ByteBuffer.wrap(utf8ByteSequenceBuffer.map(_.toByte), 0, utf8ByteSequenceLen)))
+                state = Empty
+              } else {
+                utf8ByteSequencePosition += 1
+                state = ReadPercent
+              }
+          }
+        case _ =>
+          error = "Invalid state reached. This is a cats-uri bug."
+      }
+    }
+
+    if (error eq null) {
+      state match {
+        case Empty =>
+          Right(out.flip.toString)
+        case ReadLeadingHexByteHi =>
+          Left("Reached end of String, but expected at least two more hexidecimal digits. Last character was '%'.")
+        case ReadHexByteHi =>
+          Left("Reached end of String, but expected at least two more hexidecimal digits. Last character was '%'.")
+        case ReadLeadingHexByteLow =>
+          Left("Reached end of String, but expected at least one more hexidecimal digits. Read '%' followed by hex digit, but then String terminated.")
+        case ReadHexByteLow =>
+          Left("Reached end of String, but expected at least one more hexidecimal digits. Read '%' followed by hex digit, but then String terminated.")
+        case ReadPercent =>
+          Left("Reached end of String, but expected more percent encoded values. Decoded partial multi-byte UTF-8 percent encoded sequence.")
+        case _ =>
+          throw new AssertionError("Invalid state reached. This is a cats-uri bug.")
+      }
+    } else {
+      Left(s"Error at index ${in.position() - 1} in input String: ${error}")
+    }
+  }
+
   /**
    * Percent decode a given `String`.
    */
-  def decode(value: String): Either[String, String] = {
+  def decode3(value: String): Either[String, String] = {
     val len: Int = value.length
     val buffer: IntBuffer = IntBuffer.allocate(value.codePointCount(0, len))
     var error: String = null

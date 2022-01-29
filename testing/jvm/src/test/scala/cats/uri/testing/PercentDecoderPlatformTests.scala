@@ -10,7 +10,7 @@ private[testing] abstract class PercentDecoderPlatformTests extends ScalaCheckSu
     forAll{(str: String) =>
       val encoded: String = PercentEncoder.encodeAll(str)
       val decoded: Either[String, String] = PercentDecoder.decode(encoded)
-      val javaDecoded: String = java.net.URLDecoder.decode(encoded, java.nio.charset.StandardCharsets.UTF_8)
+      val javaDecoded: String = java.net.URLDecoder.decode(encoded, "UTF-8")o
       (decoded ?= Right(javaDecoded)) && (decoded ?= Right(str))
     }
   }

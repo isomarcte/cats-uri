@@ -30,8 +30,13 @@ class PercentDecodingBenchmark {
   }
 
   @Benchmark
+  def catsUriPercentDecoder3: Either[String, String] = {
+    PercentDecoder.decode3(encodeString(generateString))
+  }
+
+  @Benchmark
   def javaStandardLibPercentDecoder: String = {
-    java.net.URLDecoder.decode(encodeString(generateString), java.nio.charset.StandardCharsets.UTF_8)
+    java.net.URLDecoder.decode(encodeString(generateString), "UTF-8")
   }
 
   @Benchmark

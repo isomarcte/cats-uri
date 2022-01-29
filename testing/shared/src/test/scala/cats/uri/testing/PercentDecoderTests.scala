@@ -5,6 +5,7 @@ import org.scalacheck.Prop._
 import munit._
 import cats.uri._
 import scala.collection.immutable.BitSet
+import java.nio.charset.StandardCharsets
 
 final class PercentDecoderTests extends PercentDecoderPlatformTests {
   test("PercentDecoder.decode should decode the empty string"){
@@ -19,7 +20,10 @@ final class PercentDecoderTests extends PercentDecoderPlatformTests {
 
   property("PercentDecoder.decode should fail on invalid unicode byte sequences"){
     forAllNoShrink(PercentDecoderTests.genInvalidPercentEncodedString){(str: String) =>
-      Prop(PercentDecoder.decode(str).isLeft)
+      PercentDecoder.decode(str).fold(
+        _ => Prop.passed,
+        value => Prop.falsified :| s"String ${str} should not have decoded, but it decoded into ${value} (bytes ${value.getBytes(StandardCharsets.UTF_8).toList})"
+      )
     }
   }
 
@@ -43,7 +47,7 @@ object PercentDecoderTests {
   private[this] val genNonHexCodePointStrings: Gen[String] =
     genUnicodeCodePoints.filterNot(
       ValidHexUnicodeCodePoints.contains
-    ).map(codePoint => Character.toString(codePoint))
+    ).map(codePoint => new String(Character.toChars(codePoint)))
 
   private[this] val genInvalidUnicodeByteSequence: Gen[List[Byte]] = {
     val genByte: Gen[Byte] =
