@@ -31,15 +31,15 @@ object PercentDecoder {
     import DecodeFSM._
 
     val len: Int = value.length
-    val in: CharBuffer = CharBuffer.wrap(value)
-    val out: CharBuffer = CharBuffer.allocate(len)
+    val out: IntBuffer = IntBuffer.allocate(value.codePointCount(0, len))
     val utf8ByteSequenceBuffer: Array[Int] = new Array(4)
+    var index: Int = 0
     var state: DecodeFSM = Empty
     var utf8ByteSequenceLen: Int = -1
     var utf8ByteSequencePosition: Int = -1
     var error: String = null
 
-    def hexCharToByte(char: Char): Int =
+    def hexCharToByte(char: Int): Int =
       char match {
         case c if c >= '0' && c <= '9' => (c - '0')
         case c if c >= 'A' && c <= 'F' => 10 + (c - 'A')
@@ -66,17 +66,19 @@ object PercentDecoder {
     def decodeUtf8BytesToCodePoint: Unit =
       utf8ByteSequenceLen match {
         case 2 =>
-          out.put(Character.toChars(((utf8ByteSequenceBuffer(0) & 0x1f) << 6) | (utf8ByteSequenceBuffer(1) & 0x3f)))
+          out.put(((utf8ByteSequenceBuffer(0) & 0x1f) << 6) | (utf8ByteSequenceBuffer(1) & 0x3f))
         case 3 =>
-          out.put(Character.toChars(((utf8ByteSequenceBuffer(0) & 0x0f) << 12) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 6) | (utf8ByteSequenceBuffer(2) & 0x3f)))
+          out.put(((utf8ByteSequenceBuffer(0) & 0x0f) << 12) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 6) | (utf8ByteSequenceBuffer(2) & 0x3f))
         case 4 =>
-          out.put(Character.toChars(((utf8ByteSequenceBuffer(0) & 0x07) << 18) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 12) | ((utf8ByteSequenceBuffer(2) & 0x3f) << 6) | (utf8ByteSequenceBuffer(3) & 0x3f)))
+          out.put(((utf8ByteSequenceBuffer(0) & 0x07) << 18) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 12) | ((utf8ByteSequenceBuffer(2) & 0x3f) << 6) | (utf8ByteSequenceBuffer(3) & 0x3f))
         case n =>
           error = s"Attempting to decode ${n} bytes, but was expected 2, 3, or 4. This is a cats-uri bug."
       }
 
-    while (in.hasRemaining && (error eq null)) {
-      val next: Char = in.get()
+    while (index < len && (error eq null)) {
+      val next: Int = value.codePointAt(index)
+      val inc: Int = if (next >= 0x10000) 2 else 1
+      index += inc
       state match {
         case Empty =>
           next match {
@@ -100,7 +102,7 @@ object PercentDecoder {
                 case 1 =>
                   // We don't need to validate this case because it is
                   // validated implicitly by utf8ByteLength
-                  out.put(byte1.toChar)
+                  out.put(byte1)
                   state = Empty
                 case n =>
                   utf8ByteSequenceBuffer(0) = byte1
@@ -146,7 +148,9 @@ object PercentDecoder {
     if (error eq null) {
       state match {
         case Empty =>
-          Right(out.flip.toString)
+          val pos: Int = out.position()
+          out.flip
+          Right(new String(out.array, 0, pos))
         case ReadLeadingHexByteHi | ReadHexByteHi =>
           Left("Reached end of String, but expected at least two more hexidecimal digits. Last character was '%'.")
         case ReadLeadingHexByteLow | ReadHexByteLow =>
@@ -155,7 +159,7 @@ object PercentDecoder {
           Left("Reached end of String, but expected more percent encoded values. Decoded partial multi-byte UTF-8 percent encoded sequence.")
       }
     } else {
-      Left(s"Error at index ${in.position() - 1} in input String: ${error}")
+      Left(s"Error at near index ${index - 1} in input String: ${error}")
     }
   }
 
