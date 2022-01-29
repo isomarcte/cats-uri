@@ -28,21 +28,16 @@ object PercentDecoder {
   }
 
   def decode(value: String): Either[String, String] = {
-    val Empty = 0
-    val ReadLeadingHexByteHi = 1
-    val ReadLeadingHexByteLow = 2
-    val ReadPercent = 3
-    val ReadHexByteHi = 4
-    val ReadHexByteLow = 5
+    import DecodeFSM._
 
     val len: Int = value.length
     val in: CharBuffer = CharBuffer.wrap(value)
     val out: CharBuffer = CharBuffer.allocate(len)
     val utf8ByteSequenceBuffer: Array[Int] = new Array(4)
+    var state: DecodeFSM = Empty
     var utf8ByteSequenceLen: Int = -1
     var utf8ByteSequencePosition: Int = -1
     var error: String = null
-    var state: Int = Empty
 
     def hexCharToByte(char: Char): Int =
       char match {
@@ -133,8 +128,6 @@ object PercentDecoder {
                 state = ReadPercent
               }
           }
-        case _ =>
-          error = "Invalid state reached. This is a cats-uri bug."
       }
     }
 
@@ -142,18 +135,12 @@ object PercentDecoder {
       state match {
         case Empty =>
           Right(out.flip.toString)
-        case ReadLeadingHexByteHi =>
+        case ReadLeadingHexByteHi | ReadHexByteHi =>
           Left("Reached end of String, but expected at least two more hexidecimal digits. Last character was '%'.")
-        case ReadHexByteHi =>
-          Left("Reached end of String, but expected at least two more hexidecimal digits. Last character was '%'.")
-        case ReadLeadingHexByteLow =>
-          Left("Reached end of String, but expected at least one more hexidecimal digits. Read '%' followed by hex digit, but then String terminated.")
-        case ReadHexByteLow =>
+        case ReadLeadingHexByteLow | ReadHexByteLow =>
           Left("Reached end of String, but expected at least one more hexidecimal digits. Read '%' followed by hex digit, but then String terminated.")
         case ReadPercent =>
           Left("Reached end of String, but expected more percent encoded values. Decoded partial multi-byte UTF-8 percent encoded sequence.")
-        case _ =>
-          throw new AssertionError("Invalid state reached. This is a cats-uri bug.")
       }
     } else {
       Left(s"Error at index ${in.position() - 1} in input String: ${error}")
