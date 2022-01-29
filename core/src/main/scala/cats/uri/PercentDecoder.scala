@@ -22,6 +22,8 @@ object PercentDecoder {
     case object Empty extends DecodeFSM
     case object ReadLeadingHexByteHi extends DecodeFSM
     case object ReadLeadingHexByteLow extends DecodeFSM
+    case object ReadLeadingHexByteLow1 extends DecodeFSM
+    case object ReadLeadingHexByteLow4 extends DecodeFSM
     case object ReadPercent extends DecodeFSM
     case object ReadHexByteHi extends DecodeFSM
     case object ReadHexByteLow extends DecodeFSM
@@ -48,6 +50,22 @@ object PercentDecoder {
           error = s"Character represented by unicode codepoint ${char} is not a valid hex character."
           Int.MaxValue
       }
+
+    def utf8ByteLengthFromNibble(b: Int): Int = {
+      b match {
+        case 0xe =>
+          3
+        case 0xf =>
+          4
+        case b if (b >> 2) == 3 =>
+          2
+        case b if (b >> 3) == 0 =>
+          1
+        case _ =>
+          error = s"Found a percent encoded sequence but it does not corrispond to any valud UTF-8 leading byte."
+          Int.MaxValue
+      }
+    }
 
     def utf8ByteLength(b: Int): Int =
       if (b < 0x80) {
@@ -77,71 +95,82 @@ object PercentDecoder {
 
     while (index < len && (error eq null)) {
       val next: Int = value.codePointAt(index)
-      val inc: Int = if (next >= 0x10000) 2 else 1
-      index += inc
       state match {
         case Empty =>
           next match {
             case PercentUnicodeCodePoint =>
               state = ReadLeadingHexByteHi
+              index += 1
             case otherwise =>
+              val inc: Int = if (next >= 0x10000) 2 else 1
+              index += inc
               out.put(otherwise)
           }
-        case ReadLeadingHexByteHi =>
-          utf8ByteSequenceBuffer(0) = hexCharToByte(next) << 4
-          state = ReadLeadingHexByteLow
-        case ReadLeadingHexByteLow =>
-          hexCharToByte(next) match {
-            case Int.MaxValue =>
-              ()
-            case low =>
-              val byte1 = utf8ByteSequenceBuffer(0) | low
-              utf8ByteLength(byte1) match {
+        case _ => {
+          index += 1
+          state match {
+            case ReadPercent =>
+              next match {
+                case PercentUnicodeCodePoint =>
+                  state = ReadHexByteHi
+                case otherwise =>
+                  error = s"Expected '%' character to complete multibyte UTF-8 sequence, but got: ${otherwise}."
+              }
+            case ReadHexByteHi =>
+              (hexCharToByte(next) << 4) match {
+                case hi if (hi & 0xc0) == 0x80 =>
+                  // All non-leading UTF-8 bytes must be less than 0xc0
+                  utf8ByteSequenceBuffer(utf8ByteSequencePosition) = hi
+                case otherwise =>
+                  error = s"Invalid non-leading UTF-8 byte value $otherwise (upper 4 bits only). All non-leading UTF-8 byte values must be < 0xc0."
+              }
+              state = ReadHexByteLow
+            case ReadHexByteLow =>
+              hexCharToByte(next) match {
                 case Int.MaxValue =>
                   ()
+                case low =>
+                  utf8ByteSequenceBuffer(utf8ByteSequencePosition) = utf8ByteSequenceBuffer(utf8ByteSequencePosition) | low
+                  if (utf8ByteSequencePosition >= (utf8ByteSequenceLen - 1)) {
+                    // Completed byte sequence
+                    decodeUtf8BytesToCodePoint
+                    state = Empty
+                  } else {
+                    utf8ByteSequencePosition += 1
+                    state = ReadPercent
+                  }
+              }
+            case ReadLeadingHexByteHi =>
+              val hi: Int = hexCharToByte(next)
+              utf8ByteSequenceBuffer(0) = hi << 4
+              utf8ByteLengthFromNibble(hi) match {
                 case 1 =>
-                  // We don't need to validate this case because it is
-                  // validated implicitly by utf8ByteLength
-                  out.put(byte1)
-                  state = Empty
+                  state = ReadLeadingHexByteLow1
+                case 4 =>
+                  utf8ByteSequenceLen = 4
+                  utf8ByteSequencePosition = 1
+                  state = ReadLeadingHexByteLow4
                 case n =>
-                  utf8ByteSequenceBuffer(0) = byte1
                   utf8ByteSequenceLen = n
                   utf8ByteSequencePosition = 1
+                  state = ReadLeadingHexByteLow
+              }
+            case ReadLeadingHexByteLow1 =>
+              out.put(utf8ByteSequenceBuffer(0) | hexCharToByte(next))
+              state = Empty
+            case ReadLeadingHexByteLow =>
+              utf8ByteSequenceBuffer(0) = utf8ByteSequenceBuffer(0) | hexCharToByte(next)
+              state = ReadPercent
+            case ReadLeadingHexByteLow4 =>
+              hexCharToByte(next) match {
+                case low if low >> 3 == 0 =>
+                  utf8ByteSequenceBuffer(0) = utf8ByteSequenceBuffer(0) | low
                   state = ReadPercent
+                case _ =>
+                  error = "Invalid UTF-8 leading byte. First 5 bits where 11111, which is not valid."
               }
           }
-        case ReadPercent =>
-          next match {
-            case PercentUnicodeCodePoint =>
-              state = ReadHexByteHi
-            case otherwise =>
-              error = s"Expected '%' character to complete multibyte UTF-8 sequence, but got: ${otherwise}."
-          }
-        case ReadHexByteHi =>
-          (hexCharToByte(next) << 4) match {
-            case hi if (hi & 0xc0) == 0x80 =>
-              // All non-leading UTF-8 bytes must be less than 0xc0
-              utf8ByteSequenceBuffer(utf8ByteSequencePosition) = hi
-            case otherwise =>
-              error = s"Invalid non-leading UTF-8 byte value $otherwise (upper 4 bits only). All non-leading UTF-8 byte values must be < 0xc0."
-          }
-          state = ReadHexByteLow
-        case ReadHexByteLow =>
-          hexCharToByte(next) match {
-            case Int.MaxValue =>
-              ()
-            case low =>
-              utf8ByteSequenceBuffer(utf8ByteSequencePosition) = utf8ByteSequenceBuffer(utf8ByteSequencePosition) | low
-              if (utf8ByteSequencePosition >= (utf8ByteSequenceLen - 1)) {
-                // Completed byte sequence
-                decodeUtf8BytesToCodePoint
-                state = Empty
-              } else {
-                utf8ByteSequencePosition += 1
-                state = ReadPercent
-              }
-          }
+        }
       }
     }
 
@@ -153,7 +182,7 @@ object PercentDecoder {
           Right(new String(out.array, 0, pos))
         case ReadLeadingHexByteHi | ReadHexByteHi =>
           Left("Reached end of String, but expected at least two more hexidecimal digits. Last character was '%'.")
-        case ReadLeadingHexByteLow | ReadHexByteLow =>
+        case ReadLeadingHexByteLow | ReadHexByteLow | ReadLeadingHexByteLow1 | ReadLeadingHexByteLow4 =>
           Left("Reached end of String, but expected at least one more hexidecimal digits. Read '%' followed by hex digit, but then String terminated.")
         case ReadPercent =>
           Left("Reached end of String, but expected more percent encoded values. Decoded partial multi-byte UTF-8 percent encoded sequence.")
