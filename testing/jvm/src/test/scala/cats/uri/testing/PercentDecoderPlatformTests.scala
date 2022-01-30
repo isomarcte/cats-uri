@@ -4,14 +4,41 @@ import cats.uri._
 import munit._
 import org.scalacheck.Prop._
 import org.scalacheck._
+import java.net.URLDecoder
 
 private[testing] abstract class PercentDecoderPlatformTests extends ScalaCheckSuite {
+  import UnicodeGenerators._
+
   property("PercentDecoder.decode should agree with java.net.URLDecoder.decode"){
     forAll{(str: String) =>
       val encoded: String = PercentEncoder.encodeAll(str)
       val decoded: Either[String, String] = PercentDecoder.decode(encoded)
-      val javaDecoded: String = java.net.URLDecoder.decode(encoded, "UTF-8")
+      val javaDecoded: String = URLDecoder.decode(encoded, "UTF-8")
       (decoded ?= Right(javaDecoded)) && (decoded ?= Right(str))
+    }
+  }
+
+  property("PercentDecoder.decode should agree with java.net.URLDecoder.decode if it decodes an arbitrary (possibly invalid) String"){
+    forAll(Arbitrary.arbitrary[String].map(_.replace("+", "%20"))){(str: String) =>
+      val encoded: String = PercentEncoder.encodeAll(str)
+      val javaDecoded: String = URLDecoder.decode(encoded, "UTF-8")
+      PercentDecoder.decode(encoded).fold(
+        e => javaDecoded.contains('\ufffd') :| "JRE URLDecoder.decode contains at least one replacement character, implying our failure is valid.",
+        decoded => decoded ?= javaDecoded
+      )
+    }
+  }
+
+  property("Overlong UTF-8 percent encoded values should decode to the replacement character with java.net.URLDecoder.decode"){
+    forAllNoShrink(genOverlongUTF8Encodings){(str: String) =>
+      val javaDecoded: String = URLDecoder.decode(str, "UTF-8")
+      if (str.length == 6) {
+        javaDecoded ?= "\ufffd\ufffd"
+      } else if (str.length == 9) {
+        javaDecoded ?= "\ufffd\ufffd\ufffd"
+      } else {
+        javaDecoded ?= "\ufffd\ufffd\ufffd\ufffd"
+      }
     }
   }
 }
