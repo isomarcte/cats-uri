@@ -29,52 +29,7 @@ object PercentDecoder {
   private def isOverlongByte4(a: Int, b: Int): Boolean =
     a == 0xf0 && b < 0x90
 
-  sealed trait DecodingError extends RuntimeException with NoStackTrace with Product with Serializable {
-
-    /** The position in the input at which the error occurred.
-      */
-    def position: Option[Int]
-
-    /**
-      * A description of the error which is always safe to render, e.g. print
-      * to the console, log out, etc.
-      */
-    def sanitizedMessage: String
-
-    /** A detailed error message which may include specific parts of the input
-      * string and thus, depending on the context, may not be safe to render.
-      */
-    def detailedMessage: Option[String]
-
-    override final def getMessage: String = sanitizedMessage
-  }
-
-  object DecodingError {
-    final case class UnexpectedEndOfInput(override val position: Int, override val sanitizedMessage: String, override val detailedMessage: Option[String]) extends DecodingError {
-      override final def toString: String = s"UnexpectedEndOfInput(position = ${position}, sanitizedMessage = ${sanitizedMessage}, detailedMessage = <REDACTED>)"
-    }
-
-    object UnexpectedEndOfInput {
-      def apply(position: Int, sanitizedMessage: String): UnexpectedEndOfInput =
-        UnexpectedEndOfInput(position, sanitizedMessage, None)
-    }
-
-    final case class UnexpectedInputValue(override val position: Int, override val sanitizedMessage: String, description: String) extends DecodingError {
-      override def detailedMessage: Option[String] =
-        Some(description)
-
-      override final def toString: String = s"UnexpectedInputValue(position = ${position}, sanitizedMessage = ${sanitizedMessage}, description = <REDACTED>)"
-    }
-
-    final case class UnicodeDecodingError(override val position: Int, override val sanitizedMessage: String, override val detailedMessage: Option[String], cause: Option[Exception]) extends DecodingError {
-      override def getCause: Throwable =
-        cause.getOrElse(null)
-    }
-  }
-
   def decode(value: String): Either[DecodingError, String] = {
-    import DecodingError._
-
     val in: ByteBuffer = ByteBuffer.wrap(value.getBytes(StandardCharsets.UTF_8))
     val out: ByteBuffer = ByteBuffer.allocate(in.remaining())
 
@@ -88,7 +43,7 @@ object PercentDecoder {
       }
 
     @tailrec
-    def loop: Either[String, String] =
+    def loop: Either[DecodingError, String] =
       if (in.hasRemaining) {
         in.get() match {
           case '%' =>
@@ -96,19 +51,19 @@ object PercentDecoder {
               val hiChar: Byte = in.get()
               hexCharToByte(hiChar) match {
                 case Int.MinValue =>
-                  Left(UnexpectedInputValue(in.position() - 1, "Expected hexidecimal character representing the high bits of a percent encoded byte, but byte did not match a valid hexidecimal character.", s"Expected byte representing hexidecimal character, but got ${hiChar}"))
+                  Left(DecodingError(in.position() - 1, "Expected hexidecimal character representing the high bits of a percent encoded byte, but byte did not match a valid hexidecimal character.", s"Expected byte representing hexidecimal character, but got ${hiChar}"))
                 case hi =>
                   val lowChar: Byte = in.get()
                   hexCharToByte(lowChar) match {
                     case Int.MinValue =>
-                  Left(UnexpectedInputValue(in.position() - 1, "Expected hexidecimal character representing the low bits of a percent encoded byte, but byte did not match a valid hexidecimal character.", s"Expected byte representing hexidecimal character, but got ${lowChar}"))
+                  Left(DecodingError(in.position() - 1, "Expected hexidecimal character representing the low bits of a percent encoded byte, but byte did not match a valid hexidecimal character.", s"Expected byte representing hexidecimal character, but got ${lowChar}"))
                     case low =>
                       out.put((hi << 4 | low).toByte)
                       loop
                   }
               }
             } else {
-              Left(UnexpectedEndOfInput(in.position - 1, "Reached end of input after parsing '%'. Expected at least two more hexidecimal characters to decode a percent encoded value. '%' is not legal in a percent encoded String unless it is part of a percent encoded byte sequence."))
+              Left(DecodingError(in.position() - 1, "Reached end of input after parsing '%'. Expected at least two more hexidecimal characters to decode a percent encoded value. '%' is not legal in a percent encoded String unless it is part of a percent encoded byte sequence."))
             }
           case otherwise =>
             out.put(otherwise)
@@ -116,212 +71,32 @@ object PercentDecoder {
         }
       } else {
         val decoder: CharsetDecoder = StandardCharsets.UTF_8.newDecoder()
-        val position: Int = out.position()
         out.flip
         ApplicativeError[Either[Throwable, *], Throwable].catchNonFatal(
           decoder.decode(out).toString
-        ).leftMap{
-          case e: CharacterCodingException =>
-            UnicodeDecodingError(position - 1, "Invalid ")
-        }
+        ).fold(
+          e => {
+            val detailedMessage: Option[String] = {
+              val message: String = e.getLocalizedMessage()
+              if((message eq null) || message.isEmpty()) {
+                None
+              } else {
+                Some(message)
+              }
+            }
+            Left(DecodingError(None, "Error encountered when attempting to decode String as UTF-8 bytes after percent decoding.", detailedMessage, Some(e)))
+          },
+          value => Right(value)
+        )
       }
 
     loop
   }
 
-  // def decode2(value: String): Either[String, String] = {
-  //   val in: CharBuffer = CharBuffer.wrap(value)
-  //   val out: CharBuffer = CharBuffer.allocate(value.length)
-  //   val byteSequenceBuffer: Array[Char] = new Array(9)
-  //   var expectingUtf8ByteSequence: Boolean = false
-  //   var leadingByte: Int = 0
-  //   var state: DecodeFSM = Empty
-  //   var utf8ByteSequenceLen: Int = -1
-  //   var utf8ByteSequencePosition: Int = -1
-  //   var error: String = null
-
-  //   def hexCharToByte(char: Char): Int =
-  //     char match {
-  //       case c if c >= '0' && c <= '9' => (c - '0')
-  //       case c if c >= 'A' && c <= 'F' => 10 + (c - 'A')
-  //       case c if c >= 'a' && c <= 'f' => 10 + (c - 'a')
-  //       case _ =>
-  //         error = s"Character represented by unicode codepoint ${char} is not a valid hex character."
-  //         Int.MaxValue
-  //     }
-
-  //   def utf8ByteLengthFromNibble(b: Int): Int = {
-  //     b match {
-  //       case 0xe =>
-  //         3
-  //       case 0xf =>
-  //         4
-  //       case b if (b >> 2) == 3 =>
-  //         2
-  //       case b if (b >> 3) == 0 =>
-  //         1
-  //       case _ =>
-  //         error = s"Found a percent encoded sequence but it does not corrispond to any valud UTF-8 leading byte."
-  //         Int.MaxValue
-  //     }
-  //   }
-
-  //   def utf8ByteLength(b: Int): Int =
-  //     if (b < 0x80) {
-  //       1
-  //     } else if ((b & 0xe0) == 0xc0) {
-  //       2
-  //     } else if ((b & 0xf0) == 0xe0) {
-  //       3
-  //     } else if ((b & 0xf8) == 0xf0) {
-  //       4
-  //     } else {
-  //       error = s"Found a percent encoded sequence but it does not corrispond to any valud UTF-8 leading byte."
-  //       Int.MaxValue
-  //     }
-
-  //   def decodeUtf8BytesToCodePoint: Unit =
-  //     utf8ByteSequenceLen match {
-  //       case 2 =>
-  //         out.put(((utf8ByteSequenceBuffer(0) & 0x1f) << 6) | (utf8ByteSequenceBuffer(1) & 0x3f))
-  //       case 3 =>
-  //         out.put(((utf8ByteSequenceBuffer(0) & 0x0f) << 12) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 6) | (utf8ByteSequenceBuffer(2) & 0x3f))
-  //       case 4 =>
-  //         out.put(((utf8ByteSequenceBuffer(0) & 0x07) << 18) | ((utf8ByteSequenceBuffer(1) & 0x3f) << 12) | ((utf8ByteSequenceBuffer(2) & 0x3f) << 6) | (utf8ByteSequenceBuffer(3) & 0x3f))
-  //       case n =>
-  //         error = s"Attempting to decode ${n} bytes, but was expected 2, 3, or 4. This is a cats-uri bug."
-  //     }
-
-  //   while (in.hasRemaining() && (error eq null)) {
-  //     val next: Int = in.get().toInt
-  //     if (expectingUtf8ByteSequence) {
-  //       val hi: Int = hexCharToByte(next)
-  //       leadingByte = hi << 4
-  //       utf8ByteLengthFromNibble(hi) match {
-  //         case 1 =>
-  //           if (in.hasRemaining()) {
-  //             out.put((leadingByte | hexCharToByte(in.get()).toChar))
-  //           } else {
-  //             error = "Error while decoding percent encoded UTF-8 byte sequence. Expected at least 1 more hexidecimal character, but reached end of input."
-  //           }
-  //         case 2 =>
-  //           // Get 4 characters, the low order bits of the leading byte, the next '%' and the next byte.
-  //           if (in.remaining >= 4) {
-  //             in.get(byteSequenceBuffer, 0, 4)
-  //             if (byteSequenceBuffer(1) == '%') {
-  //               leadingByte = leadingByte | hexCharToByte(byteSequenceBuffer(0))
-  //               val byte2: Int = (hexCharToByte(2) << 4) | hexCharToByte(3)
-  //             } else {
-  //               error = s"Error while decoding percent encoded UTF-8 byte sequence. Leading 4 bits indicated the byte sequence length was 2, first byte's high order its were not followed by a valid percent encoded second byte."
-  //             }
-  //           } else {
-  //             error = s"Error while decoding percent encoded UTF-8 byte sequence. Expected at least 4 more characters to complete UTF-8 byte sequence, but input only has ${in.remaining}."
-  //           }
-  //         case 4 =>
-  //           utf8ByteSequenceLen = 4
-  //           utf8ByteSequencePosition = 1
-  //           state = ReadLeadingHexByteLow4
-  //         case n =>
-  //           utf8ByteSequenceLen = n
-  //           utf8ByteSequencePosition = 1
-  //           state = ReadLeadingHexByteLow
-  //       }
-  //     } else {
-  //       next match {
-  //         case '%' =>
-  //           expectingUtf8ByteSequence = true
-  //         case otherwise =>
-  //           out.put(otherwise)
-  //       }
-  //     }
-  //     state match {
-  //       case Empty =>
-
-  //       case _ =>
-  //         val hi: Int = hexCharToByte(next)
-  //         leadingByte = hi << 4
-  //         utf8ByteLengthFromNibble(hi) match {
-  //           case 1 =>
-  //             state = ReadLeadingHexByteLow1
-  //           case 4 =>
-  //             utf8ByteSequenceLen = 4
-  //             utf8ByteSequencePosition = 1
-  //             state = ReadLeadingHexByteLow4
-  //           case n =>
-  //             utf8ByteSequenceLen = n
-  //             utf8ByteSequencePosition = 1
-  //             state = ReadLeadingHexByteLow
-  //         }
-  //       case ReadLeadingHexByteLow1 =>
-  //         out.put(utf8ByteSequenceBuffer(0) | hexCharToByte(next))
-  //         state = Empty
-  //       case ReadLeadingHexByteLow =>
-  //         utf8ByteSequenceBuffer(0) = utf8ByteSequenceBuffer(0) | hexCharToByte(next)
-  //         state = ReadPercent
-  //       case ReadLeadingHexByteLow4 =>
-  //         hexCharToByte(next) match {
-  //           case low if low >> 3 == 0 =>
-  //             utf8ByteSequenceBuffer(0) = utf8ByteSequenceBuffer(0) | low
-  //             state = ReadPercent
-  //           case _ =>
-  //             error = "Invalid UTF-8 leading byte. First 5 bits where 11111, which is not valid."
-  //         }
-  //       case ReadPercent =>
-  //         next match {
-  //           case PercentUnicodeCodePoint =>
-  //             state = ReadHexByteHi
-  //           case otherwise =>
-  //             error = s"Expected '%' character to complete multibyte UTF-8 sequence, but got: ${otherwise}."
-  //         }
-  //       case ReadHexByteHi =>
-  //         (hexCharToByte(next) << 4) match {
-  //           case hi if (hi & 0xc0) == 0x80 =>
-  //             // All non-leading UTF-8 bytes must be less than 0xc0
-  //             utf8ByteSequenceBuffer(utf8ByteSequencePosition) = hi
-  //           case otherwise =>
-  //             error = s"Invalid non-leading UTF-8 byte value $otherwise (upper 4 bits only). All non-leading UTF-8 byte values must be < 0xc0."
-  //         }
-  //         state = ReadHexByteLow
-  //       case ReadHexByteLow =>
-  //         hexCharToByte(next) match {
-  //           case Int.MaxValue =>
-  //             ()
-  //           case low =>
-  //             utf8ByteSequenceBuffer(utf8ByteSequencePosition) = utf8ByteSequenceBuffer(utf8ByteSequencePosition) | low
-  //             if (utf8ByteSequencePosition >= (utf8ByteSequenceLen - 1)) {
-  //               // Completed byte sequence
-  //               decodeUtf8BytesToCodePoint
-  //               state = Empty
-  //             } else {
-  //               utf8ByteSequencePosition += 1
-  //               state = ReadPercent
-  //             }
-  //         }
-  //     }
-  //   }
-
-  //   if (error eq null) {
-  //     state match {
-  //       case Empty =>
-  //         val pos: Int = out.position()
-  //         out.flip
-  //         Right(new String(out.array, 0, pos))
-  //       case ReadLeadingHexByteHi | ReadHexByteHi =>
-  //         Left("Reached end of String, but expected at least two more hexidecimal digits. Last character was '%'.")
-  //       case ReadLeadingHexByteLow | ReadHexByteLow | ReadLeadingHexByteLow1 | ReadLeadingHexByteLow4 =>
-  //         Left("Reached end of String, but expected at least one more hexidecimal digits. Read '%' followed by hex digit, but then String terminated.")
-  //       case ReadPercent =>
-  //         Left("Reached end of String, but expected more percent encoded values. Decoded partial multi-byte UTF-8 percent encoded sequence.")
-  //     }
-  //   } else {
-  //     Left(s"Error at near index ${index - 1} in input String: ${error}")
-  //   }
-  // }
-
   /**
    * Percent decode a given `String`.
    */
-  def decode(value: String): Either[String, String] = {
+  def decode2(value: String): Either[String, String] = {
     val len: Int = value.length
     val buffer: IntBuffer = IntBuffer.allocate(value.codePointCount(0, len))
     var error: String = null
@@ -495,7 +270,7 @@ object PercentDecoder {
 
   def unsafeDecode(value: String): String =
     decode(value).fold(
-      e => throw new IllegalArgumentException(e),
+      e => throw e,
       identity
     )
 }

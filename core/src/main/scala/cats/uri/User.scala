@@ -88,8 +88,8 @@ object User {
    * `String`. [[User]] values must be non-empty to disambiguate them from
    * `Option[User]`.
    */
-  def fromPercentEncodedString(value: String): Either[String, User] =
-    PercentDecoder.decode(value).flatMap(fromString)
+  def fromPercentEncodedString(value: String): Either[DecodingError, User] =
+    PercentDecoder.decode(value).flatMap(s => fromString(s).leftMap(error => DecodingError(0, error)))
 
   /**
    * As [[#fromString]], but will throw on invalid `Strings`.

@@ -217,15 +217,15 @@ object UserInfo {
    * val res1: cats.uri.UserInfo = UserInfo(user = Some(User(value = user)), password = None, hasColonDelimiter = false)
    * }}}
    */
-  def fromPercentEncodedString(value: String): Either[String, UserInfo] =
-    Rfc3986.userinfo.parseAll(value).leftMap(_ => "Invalid percent encoded UserInfo String.").flatMap{
+  def fromPercentEncodedString(value: String): Either[DecodingError, UserInfo] =
+    Rfc3986.userinfo.parseAll(value).leftMap(_ => DecodingError("Invalid percent encoded UserInfo String.", s"Invalid value: ${value}")).flatMap{
       case (user, colon, password) if user.isDefined || colon.isDefined || password.isDefined =>
         for {
           u <- user.traverse(User.fromPercentEncodedString)
           p <- password.traverse(Password.fromPercentEncodedString)
         } yield UserInfoImpl(u, p, colon.isDefined)
       case _ =>
-        Left("The empty string is not a valid UserInfo value.")
+        Left(DecodingError(0, "The empty string is not a valid UserInfo value."))
     }
 
   /**

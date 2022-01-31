@@ -12,7 +12,7 @@ private[testing] abstract class PercentDecoderPlatformTests extends ScalaCheckSu
   property("PercentDecoder.decode should agree with java.net.URLDecoder.decode"){
     forAll{(str: String) =>
       val encoded: String = PercentEncoder.encodeAll(str)
-      val decoded: Either[String, String] = PercentDecoder.decode(encoded)
+      val decoded: Either[DecodingError, String] = PercentDecoder.decode(encoded)
       val javaDecoded: String = URLDecoder.decode(encoded, "UTF-8")
       (decoded ?= Right(javaDecoded)) && (decoded ?= Right(str))
     }

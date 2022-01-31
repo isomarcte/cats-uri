@@ -44,7 +44,11 @@ private object UserSyntax {
     def validate(c: Context)(s: String) = {
       import c.universe._
 
-      User.fromPercentEncodedString(s).map(_ => c.Expr(q"User.unsafeFromPercentEncodedString($s)"))
+      User.fromPercentEncodedString(s) match {
+        case Left(e) => Left(e.getLocalizedMessage)
+        case _ =>
+          Right(c.Expr(q"User.unsafeFromPercentEncodedString($s)"))
+      }
     }
 
     def make(c: Context)(args: c.Expr[Any]*): c.Expr[User] =
