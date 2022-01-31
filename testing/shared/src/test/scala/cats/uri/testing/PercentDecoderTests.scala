@@ -43,4 +43,13 @@ final class PercentDecoderTests extends PercentDecoderPlatformTests {
       )
     }
   }
+
+  property("Percent encoded byte sequences which represent code points > 0x10ffff are not valid UTF-8 and should fail decoding."){
+    forAllNoShrink(genLargerThanUTF8Range){(str: String) =>
+      PercentDecoder.decode(str).fold(
+        _ => Prop.passed,
+        decoded => Prop.falsified :| s"Percent encoded sequence ${str} reprsents a code point larger than is valid for a UTF-8 encoding. It should have failed decoding, but it decoded with a value of: ${decoded}"
+      )
+    }
+  }
 }

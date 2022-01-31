@@ -33,6 +33,24 @@ private[testing] object UnicodeGenerators {
     s"%${intToHexChar(hi)}${intToHexChar(low)}"
   }
 
+  def unvalidatedCodePointToBytes(codePoint: Int): Vector[Int] =
+    if (codePoint <= 0x7f) {
+      // 1 byte
+      Vector(codePoint)
+    } else if (codePoint <= 0x7ff) {
+      // 2 bytes
+      Vector((codePoint >> 6) | 0xc0, (codePoint & 0x3f) | 0x80)
+    } else if (codePoint <= 0xffff) {
+      // 3 bytes
+      Vector((codePoint >> 12) | 0xe0, ((codePoint >> 6) & 0x3f) | 0x80, (codePoint & 0x3f) | 0x80)
+    } else {
+      // 4 bytes
+      //
+      // This can generate invalid UTF-8 byte representations, which is what
+      // we want testing.
+      Vector((codePoint >> 18) | 0xf0, ((codePoint >> 12) & 0x3f) | 0x80, ((codePoint >> 6) & 0x3f) | 0x80, (codePoint & 0x3f) | 0x80)
+    }
+
   def stringToSequenceOfCodePoints(value: String): Vector[Int] = {
     @tailrec
     def loop(index: Int, acc: Vector[Int]): Vector[Int] = {
@@ -218,4 +236,11 @@ private[testing] object UnicodeGenerators {
       ).map(value => s"%${value}")
     )
   }
+
+  val genLargerThanUTF8Range: Gen[String] =
+    shuffleCaseGen(
+      Gen.choose(0x110000, 0x1fffff).map(invalidCodePoint =>
+        unvalidatedCodePointToBytes(invalidCodePoint).map(i => byteToPercentHexString(i.toByte)).mkString
+      )
+    )
 }

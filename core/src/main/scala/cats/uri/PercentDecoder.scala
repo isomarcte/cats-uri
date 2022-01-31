@@ -1,5 +1,6 @@
 package cats.uri
 
+import cats._
 import cats.syntax.all._
 import cats.data._
 import java.nio.CharBuffer
@@ -11,6 +12,7 @@ import scala.annotation.tailrec
 import java.nio.charset.StandardCharsets
 import java.nio.IntBuffer
 import java.nio.ByteBuffer
+import java.nio.charset.CharsetDecoder
 
 object PercentDecoder {
 
@@ -25,7 +27,55 @@ object PercentDecoder {
   private def isOverlongByte4(a: Int, b: Int): Boolean =
     a == 0xf0 && b < 0x90
 
-  // def decode(value: String): Either[String, String] = {
+  private val threadLocalUTF8Decoder: ThreadLocal[CharsetDecoder] =
+    new ThreadLocal[CharsetDecoder] {
+      override protected def initialValue(): CharsetDecoder =
+        StandardCharsets.UTF_8.newDecoder()
+    }
+
+  def decode2(value: String): Either[String, String] = {
+    val in: ByteBuffer = ByteBuffer.wrap(value.getBytes(StandardCharsets.UTF_8))
+    val out: ByteBuffer = ByteBuffer.allocate(in.remaining())
+    var error: String = null
+
+    def hexCharToByte(char: Byte): Int =
+      char match {
+        case c if c >= '0' && c <= '9' => (c - '0')
+        case c if c >= 'A' && c <= 'F' => 10 + (c - 'A')
+        case c if c >= 'a' && c <= 'f' => 10 + (c - 'a')
+        case _ =>
+          error = s"Character represented by unicode codepoint ${char} is not a valid hex character."
+          Int.MaxValue
+      }
+
+    while(in.hasRemaining() && (error eq null)) {
+      in.get() match {
+        case '%' =>
+          if (in.remaining() >= 2) {
+            val hi: Int = hexCharToByte(in.get())
+            val low: Int = hexCharToByte(in.get())
+            out.put((hi << 4 | low).toByte)
+          } else {
+            error = s"Error at index ${in.position()}. Reached end of input while attempting to decode percent encoded sequence."
+          }
+        case otherwise =>
+          out.put(otherwise)
+      }
+    }
+
+    if (error eq null) {
+      out.flip
+      ApplicativeError[Either[Throwable, *], Throwable].catchNonFatal(
+        threadLocalUTF8Decoder.get().decode(out).toString
+      ).leftMap(
+        _.getLocalizedMessage
+      )
+    } else {
+      Left(error)
+    }
+  }
+
+  // def decode2(value: String): Either[String, String] = {
   //   val in: CharBuffer = CharBuffer.wrap(value)
   //   val out: CharBuffer = CharBuffer.allocate(value.length)
   //   val byteSequenceBuffer: Array[Char] = new Array(9)
@@ -89,14 +139,14 @@ object PercentDecoder {
   //     }
 
   //   while (in.hasRemaining() && (error eq null)) {
-  //     val next: Int = in.get()
+  //     val next: Int = in.get().toInt
   //     if (expectingUtf8ByteSequence) {
   //       val hi: Int = hexCharToByte(next)
   //       leadingByte = hi << 4
   //       utf8ByteLengthFromNibble(hi) match {
   //         case 1 =>
   //           if (in.hasRemaining()) {
-  //             out.put(leadingByte | hexCharToByte(in.get()).toChar)
+  //             out.put((leadingByte | hexCharToByte(in.get()).toChar))
   //           } else {
   //             error = "Error while decoding percent encoded UTF-8 byte sequence. Expected at least 1 more hexidecimal character, but reached end of input."
   //           }
@@ -104,7 +154,12 @@ object PercentDecoder {
   //           // Get 4 characters, the low order bits of the leading byte, the next '%' and the next byte.
   //           if (in.remaining >= 4) {
   //             in.get(byteSequenceBuffer, 0, 4)
-  //             leadingByte | hexCharToByte(byteSequenceBuffer(0))
+  //             if (byteSequenceBuffer(1) == '%') {
+  //               leadingByte = leadingByte | hexCharToByte(byteSequenceBuffer(0))
+  //               val byte2: Int = (hexCharToByte(2) << 4) | hexCharToByte(3)
+  //             } else {
+  //               error = s"Error while decoding percent encoded UTF-8 byte sequence. Leading 4 bits indicated the byte sequence length was 2, first byte's high order its were not followed by a valid percent encoded second byte."
+  //             }
   //           } else {
   //             error = s"Error while decoding percent encoded UTF-8 byte sequence. Expected at least 4 more characters to complete UTF-8 byte sequence, but input only has ${in.remaining}."
   //           }
@@ -323,7 +378,12 @@ object PercentDecoder {
               if (isOverlongByte4(a, b)) {
                 error = s"Error at index ${index - 12}. UTF-8 byte sequence of 4 bytes is overlong."
               } else {
-                buffer.put((a & 0x7) << 18 | (b & 0x3f) << 12 | (c & 0x3f) << 6 | d & 0x3f)
+                val codePoint: Int = (a & 0x7) << 18 | (b & 0x3f) << 12 | (c & 0x3f) << 6 | d & 0x3f
+                if (codePoint > 0x10ffff) {
+                  error = s"Error at index ${index - 12}. The decoded percent encoded byte sequence represents ${codePoint.toHexString}, which is larger than is valid for Unicode."
+                } else {
+                  buffer.put(codePoint)
+                }
               }
             } else {
               error =s"Erorr at index ${index - 12}. Invalid UTF-8 byte encoding: ${a.toHexString} ${b.toHexString} ${c.toHexString}"

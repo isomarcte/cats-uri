@@ -41,6 +41,13 @@ private[testing] abstract class PercentDecoderPlatformTests extends ScalaCheckSu
       }
     }
   }
+
+  property("Byte sequences which would represent code points > 0x10ffff should decode to replacement characters with java.net.URLDecoder.decode") {
+    forAllNoShrink(genLargerThanUTF8Range){(str: String) =>
+      val javaDecoded: String = URLDecoder.decode(str, "UTF-8")
+      javaDecoded ?= "\ufffd\ufffd\ufffd\ufffd"
+    }
+  }
 }
 
 private[testing] object PercentDecoderPlatformTests

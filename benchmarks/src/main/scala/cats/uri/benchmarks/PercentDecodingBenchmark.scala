@@ -6,7 +6,7 @@ import org.openjdk.jmh.annotations._
 import com.google.common.net.PercentEscaper
 import scala.collection.immutable.BitSet
 
-@State(Scope.Benchmark)
+@State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
 class PercentDecodingBenchmark {
 
@@ -15,10 +15,21 @@ class PercentDecodingBenchmark {
   val genString: Gen[String] =
     Arbitrary.arbitrary[String]
 
+  val genPred: Gen[Int => Boolean] =
+    Arbitrary.arbitrary[Int => Boolean]
+
   def generateString: String = {
     val s: String = genString(Gen.Parameters.default, rng.Seed(currentSeed)).getOrElse(throw new AssertionError("Failed to generate string"))
     currentSeed += 1L
     s
+  }
+
+  def generateEncoderPredicate: Int => Boolean = {
+    val f: Int => Boolean = genPred(Gen.Parameters.default, rng.Seed(currentSeed)).getOrElse(throw new AssertionError("Failed to generate encoder predicate"))
+    currentSeed += 1L
+    (codePoint: Int) => {
+      (codePoint != '%'.toInt) && f(codePoint)
+    }
   }
 
   def encodeString(value: String): String =
@@ -27,9 +38,17 @@ class PercentDecodingBenchmark {
   def encodeMin(value: String): String =
     PercentEncoder.encodeMinimal(value)
 
+  def encodeMixed(value: String, pred: Int => Boolean): String =
+    PercentEncoder.encode(pred)(value)
+
   @Benchmark
   def catsUriPercentDecoder: Either[String, String] = {
     PercentDecoder.decode(encodeString(generateString))
+  }
+
+  @Benchmark
+  def catsUriPercentDecoder2: Either[String, String] = {
+    PercentDecoder.decode2(encodeString(generateString))
   }
 
   @Benchmark
@@ -49,6 +68,11 @@ class PercentDecodingBenchmark {
   }
 
   @Benchmark
+  def catsUriPercentDecoderMin2: Either[String, String] = {
+    PercentDecoder.decode2(encodeMin(generateString))
+  }
+
+  @Benchmark
   def javaStandardLibPercentDecoderMin: String = {
     java.net.URLDecoder.decode(encodeMin(generateString), "UTF-8")
   }
@@ -57,5 +81,26 @@ class PercentDecodingBenchmark {
   def http4sUriDecoderMin: String = {
     import org.http4s.Uri
     Uri.decode(encodeMin(generateString))
+  }
+
+  @Benchmark
+  def catsUriPercentDecoderMixed: Either[String, String] = {
+    PercentDecoder.decode(encodeMixed(generateString, generateEncoderPredicate))
+  }
+
+  @Benchmark
+  def catsUriPercentDecoderMixed2: Either[String, String] = {
+    PercentDecoder.decode2(encodeMixed(generateString, generateEncoderPredicate))
+  }
+
+  @Benchmark
+  def javaStandardLibPercentDecoderMixed: String = {
+    java.net.URLDecoder.decode(encodeMixed(generateString, generateEncoderPredicate), "UTF-8")
+  }
+
+  @Benchmark
+  def http4sUriDecoderMixed: String = {
+    import org.http4s.Uri
+    Uri.decode(encodeMixed(generateString, generateEncoderPredicate))
   }
 }
