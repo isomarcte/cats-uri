@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.IntBuffer
 import java.nio.ByteBuffer
 import java.nio.charset.CharsetDecoder
+import java.nio.charset.CharacterCodingException
+import scala.util.control.NoStackTrace
 
 object PercentDecoder {
 
@@ -27,7 +29,52 @@ object PercentDecoder {
   private def isOverlongByte4(a: Int, b: Int): Boolean =
     a == 0xf0 && b < 0x90
 
-  def decode(value: String): Either[String, String] = {
+  sealed trait DecodingError extends RuntimeException with NoStackTrace with Product with Serializable {
+
+    /** The position in the input at which the error occurred.
+      */
+    def position: Option[Int]
+
+    /**
+      * A description of the error which is always safe to render, e.g. print
+      * to the console, log out, etc.
+      */
+    def sanitizedMessage: String
+
+    /** A detailed error message which may include specific parts of the input
+      * string and thus, depending on the context, may not be safe to render.
+      */
+    def detailedMessage: Option[String]
+
+    override final def getMessage: String = sanitizedMessage
+  }
+
+  object DecodingError {
+    final case class UnexpectedEndOfInput(override val position: Int, override val sanitizedMessage: String, override val detailedMessage: Option[String]) extends DecodingError {
+      override final def toString: String = s"UnexpectedEndOfInput(position = ${position}, sanitizedMessage = ${sanitizedMessage}, detailedMessage = <REDACTED>)"
+    }
+
+    object UnexpectedEndOfInput {
+      def apply(position: Int, sanitizedMessage: String): UnexpectedEndOfInput =
+        UnexpectedEndOfInput(position, sanitizedMessage, None)
+    }
+
+    final case class UnexpectedInputValue(override val position: Int, override val sanitizedMessage: String, description: String) extends DecodingError {
+      override def detailedMessage: Option[String] =
+        Some(description)
+
+      override final def toString: String = s"UnexpectedInputValue(position = ${position}, sanitizedMessage = ${sanitizedMessage}, description = <REDACTED>)"
+    }
+
+    final case class UnicodeDecodingError(override val position: Int, override val sanitizedMessage: String, override val detailedMessage: Option[String], cause: Option[Exception]) extends DecodingError {
+      override def getCause: Throwable =
+        cause.getOrElse(null)
+    }
+  }
+
+  def decode(value: String): Either[DecodingError, String] = {
+    import DecodingError._
+
     val in: ByteBuffer = ByteBuffer.wrap(value.getBytes(StandardCharsets.UTF_8))
     val out: ByteBuffer = ByteBuffer.allocate(in.remaining())
 
@@ -49,19 +96,19 @@ object PercentDecoder {
               val hiChar: Byte = in.get()
               hexCharToByte(hiChar) match {
                 case Int.MinValue =>
-                  Left(s"Error at index ${in.position() - 1}. Expected hexidecimal character following '%', but got byte ${hiChar}.")
+                  Left(UnexpectedInputValue(in.position() - 1, "Expected hexidecimal character representing the high bits of a percent encoded byte, but byte did not match a valid hexidecimal character.", s"Expected byte representing hexidecimal character, but got ${hiChar}"))
                 case hi =>
                   val lowChar: Byte = in.get()
                   hexCharToByte(lowChar) match {
                     case Int.MinValue =>
-                      Left(s"Error at index ${in.position() - 1}. Expected hexidecimal character following '%', but got byte ${lowChar}.")
+                  Left(UnexpectedInputValue(in.position() - 1, "Expected hexidecimal character representing the low bits of a percent encoded byte, but byte did not match a valid hexidecimal character.", s"Expected byte representing hexidecimal character, but got ${lowChar}"))
                     case low =>
                       out.put((hi << 4 | low).toByte)
                       loop
                   }
               }
             } else {
-              Left(s"Error at index ${in.position() - 1}. Reached end of input while attempting to decode percent encoded sequence.")
+              Left(UnexpectedEndOfInput(in.position - 1, "Reached end of input after parsing '%'. Expected at least two more hexidecimal characters to decode a percent encoded value. '%' is not legal in a percent encoded String unless it is part of a percent encoded byte sequence."))
             }
           case otherwise =>
             out.put(otherwise)
@@ -69,12 +116,14 @@ object PercentDecoder {
         }
       } else {
         val decoder: CharsetDecoder = StandardCharsets.UTF_8.newDecoder()
+        val position: Int = out.position()
         out.flip
         ApplicativeError[Either[Throwable, *], Throwable].catchNonFatal(
           decoder.decode(out).toString
-        ).leftMap(
-          _.getLocalizedMessage
-        )
+        ).leftMap{
+          case e: CharacterCodingException =>
+            UnicodeDecodingError(position - 1, "Invalid ")
+        }
       }
 
     loop
