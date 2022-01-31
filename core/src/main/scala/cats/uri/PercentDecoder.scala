@@ -27,16 +27,9 @@ object PercentDecoder {
   private def isOverlongByte4(a: Int, b: Int): Boolean =
     a == 0xf0 && b < 0x90
 
-  private val threadLocalUTF8Decoder: ThreadLocal[CharsetDecoder] =
-    new ThreadLocal[CharsetDecoder] {
-      override protected def initialValue(): CharsetDecoder =
-        StandardCharsets.UTF_8.newDecoder()
-    }
-
-  def decode2(value: String): Either[String, String] = {
+  def decode(value: String): Either[String, String] = {
     val in: ByteBuffer = ByteBuffer.wrap(value.getBytes(StandardCharsets.UTF_8))
     val out: ByteBuffer = ByteBuffer.allocate(in.remaining())
-    var error: String = null
 
     def hexCharToByte(char: Byte): Int =
       char match {
@@ -44,35 +37,47 @@ object PercentDecoder {
         case c if c >= 'A' && c <= 'F' => 10 + (c - 'A')
         case c if c >= 'a' && c <= 'f' => 10 + (c - 'a')
         case _ =>
-          error = s"Character represented by unicode codepoint ${char} is not a valid hex character."
           Int.MaxValue
       }
 
-    while(in.hasRemaining() && (error eq null)) {
-      in.get() match {
-        case '%' =>
-          if (in.remaining() >= 2) {
-            val hi: Int = hexCharToByte(in.get())
-            val low: Int = hexCharToByte(in.get())
-            out.put((hi << 4 | low).toByte)
-          } else {
-            error = s"Error at index ${in.position()}. Reached end of input while attempting to decode percent encoded sequence."
-          }
-        case otherwise =>
-          out.put(otherwise)
+    @tailrec
+    def loop: Either[String, String] =
+      if (in.hasRemaining) {
+        in.get() match {
+          case '%' =>
+            if (in.remaining() >= 2) {
+              val hiChar: Byte = in.get()
+              hexCharToByte(hiChar) match {
+                case Int.MinValue =>
+                  Left(s"Error at index ${in.position() - 1}. Expected hexidecimal character following '%', but got byte ${hiChar}.")
+                case hi =>
+                  val lowChar: Byte = in.get()
+                  hexCharToByte(lowChar) match {
+                    case Int.MinValue =>
+                      Left(s"Error at index ${in.position() - 1}. Expected hexidecimal character following '%', but got byte ${lowChar}.")
+                    case low =>
+                      out.put((hi << 4 | low).toByte)
+                      loop
+                  }
+              }
+            } else {
+              Left(s"Error at index ${in.position() - 1}. Reached end of input while attempting to decode percent encoded sequence.")
+            }
+          case otherwise =>
+            out.put(otherwise)
+            loop
+        }
+      } else {
+        val decoder: CharsetDecoder = StandardCharsets.UTF_8.newDecoder()
+        out.flip
+        ApplicativeError[Either[Throwable, *], Throwable].catchNonFatal(
+          decoder.decode(out).toString
+        ).leftMap(
+          _.getLocalizedMessage
+        )
       }
-    }
 
-    if (error eq null) {
-      out.flip
-      ApplicativeError[Either[Throwable, *], Throwable].catchNonFatal(
-        threadLocalUTF8Decoder.get().decode(out).toString
-      ).leftMap(
-        _.getLocalizedMessage
-      )
-    } else {
-      Left(error)
-    }
+    loop
   }
 
   // def decode2(value: String): Either[String, String] = {
