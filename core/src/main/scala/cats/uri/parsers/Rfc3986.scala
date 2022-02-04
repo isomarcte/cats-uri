@@ -178,4 +178,16 @@ object Rfc3986 {
   val userinfo: Parser0[(Option[String], Option[Unit], Option[String])] =
     (nonEmptyStringParser(userinfoUserStr) ~ Parser.char(':').? ~ nonEmptyStringParser(
       userinfoPasswordStr)).map { case ((a, b), c) => (a, b, c) }
+
+  /**
+    * A parser for a "Registered Name".
+    *
+    * {{{
+    * reg-name = *( unreserved / pct-encoded / sub-delims )
+    * }}}
+    *
+    * @see [[https://datatracker.ietf.org/doc/html/rfc3986/#section-3.2.2]]
+    */
+  val regName: Parser0[String] =
+    (unreservedChar | percentEncoded | subDelimsChar).rep0.string
 }

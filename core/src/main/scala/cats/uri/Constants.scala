@@ -95,4 +95,17 @@ private[uri] object Constants {
    */
   val passwordChars: SortedSet[Char] =
     userChars + ':'
+
+  /**
+    * The set of characters which are permitted in the `reg-name` section, in
+    * the `host`, in the `authority`.
+    *
+    * {{{
+    * reg-name = *( unreserved / pct-encoded / sub-delims )
+    * }}}
+    *
+    * @see [[https://datatracker.ietf.org/doc/html/rfc3986/#section-3.2.2]]
+    */
+  val registeredNameChars: SortedSet[Char] =
+    unreservedChars ++ percentEncodedChars ++ subDelimsChars
 }
