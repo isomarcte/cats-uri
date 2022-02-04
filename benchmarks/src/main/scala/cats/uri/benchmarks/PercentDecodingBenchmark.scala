@@ -47,7 +47,7 @@ class PercentDecodingBenchmark {
 
   @Benchmark
   def catsUriPercentDecoderAll: String = {
-    val s: String      = nextString
+    val s: String = nextString
     val result: String = PercentDecoder.unsafeDecode(PercentEncoder.encodeAll(s))
     assert(s === result)
     result
@@ -60,7 +60,7 @@ class PercentDecodingBenchmark {
   // a useful comparison benchmark.
   @Benchmark
   def javaStandardLibPercentDecoderAll: String = {
-    val s: String      = nextString
+    val s: String = nextString
     val result: String = URLDecoder.decode(PercentEncoder.encodeAll(s), "UTF-8")
     assert(s === result)
     result
@@ -68,7 +68,7 @@ class PercentDecodingBenchmark {
 
   @Benchmark
   def http4sUriDecoderAll: String = {
-    val s: String      = nextString
+    val s: String = nextString
     val result: String = Uri.decode(PercentEncoder.encodeAll(s))
     assert(s === result)
     result
@@ -79,7 +79,7 @@ class PercentDecodingBenchmark {
 
   @Benchmark
   def catsUriPercentDecoderMin: String = {
-    val s: String      = nextString
+    val s: String = nextString
     val result: String = PercentDecoder.unsafeDecode(PercentEncoder.encodeMinimal(s))
     assert(s === result)
     result
@@ -92,7 +92,7 @@ class PercentDecodingBenchmark {
   // a useful comparison benchmark.
   @Benchmark
   def javaStandardLibPercentDecoderMin: String = {
-    val s: String      = nextString
+    val s: String = nextString
     val result: String = URLDecoder.decode(PercentEncoder.encodeMinimal(s), "UTF-8")
     assert(s === result)
     result
@@ -100,7 +100,7 @@ class PercentDecodingBenchmark {
 
   @Benchmark
   def http4sUriDecoderMin: String = {
-    val s: String      = nextString
+    val s: String = nextString
     val result: String = Uri.decode(PercentEncoder.encodeMinimal(s))
     assert(s === result)
     result
@@ -118,9 +118,9 @@ class PercentDecodingBenchmark {
 
   @Benchmark
   def catsUriPercentDecoderMixed: String = {
-    val s: String            = nextString
+    val s: String = nextString
     val pred: Int => Boolean = nextPred
-    val result: String       = PercentDecoder.unsafeDecode(PercentEncoder.encode(pred)(s))
+    val result: String = PercentDecoder.unsafeDecode(PercentEncoder.encode(pred)(s))
     assert(s === result)
     result
   }
@@ -132,18 +132,18 @@ class PercentDecodingBenchmark {
   // a useful comparison benchmark.
   @Benchmark
   def javaStandardLibPercentDecoderMixed: String = {
-    val s: String            = nextString
+    val s: String = nextString
     val pred: Int => Boolean = nextPred
-    val result: String       = URLDecoder.decode(PercentEncoder.encode(pred)(s), "UTF-8")
+    val result: String = URLDecoder.decode(PercentEncoder.encode(pred)(s), "UTF-8")
     assert(s === result)
     result
   }
 
   @Benchmark
   def http4sUriDecoderMixed: String = {
-    val s: String            = nextString
+    val s: String = nextString
     val pred: Int => Boolean = nextPred
-    val result: String       = Uri.decode(PercentEncoder.encode(pred)(s))
+    val result: String = Uri.decode(PercentEncoder.encode(pred)(s))
     assert(s === result)
     result
   }
